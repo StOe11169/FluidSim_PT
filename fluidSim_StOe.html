@@ -75,19 +75,20 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
   var canvas = document.getElementById("myCanvas");
   var c = canvas.getContext("2d");
-  canvas.width = window.innerWidth - 20;          //TODO Make changeable. window.innerWidth is browser specific/current window
+  canvas.width = 1000; //window.innerWidth - 20;          //TODO Make changeable. window.innerWidth is browser specific/current window
                                                   //TODO Stays small when you start in a small window. Influences fluid speed
-  canvas.height = window.innerHeight - 100;       //TODO Make changeable
+  canvas.height = 750; //window.innerHeight - 100;       //TODO Make changeable
 
   canvas.focus();                                 // Focused element receives keyboard and similar events by default
 
   var simHeight = 1.1;                        //TODO Make changeable
-  var cScale = canvas.height / simHeight;		// Scale/extent of the canvas
-  var simWidth = canvas.width / cScale;
+  var canvasScale = canvas.height / simHeight;		// Scale/extent of the canvas
+  var simWidth = canvas.width / canvasScale;
 
-  var U_FIELD = 0;		//"IDs" to differentiate the diffrent fields
-  var V_FIELD = 1;
-  var S_FIELD = 2;
+
+  var horizontalVelocity_FIELD_ID = 0;		//"IDs" to differentiate the diffrent fields
+  var verticalVelocity_FIELD_ID = 1;
+  var smoke_FIELD_ID = 2;
 
   var cnt = 0;
   var densitySlider = document.getElementById("densitySlider");
@@ -100,12 +101,12 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
   }
 
 
-  function cX(x) {		//converts simulation coordinates into canvas coordinates
-    return x * cScale;
+  function convertSimToCanvasX(x) {		//converts simulation coordinates into canvas coordinates
+    return x * canvasScale;
   }
 
-  function cY(y) {		//converts simulation coordinates into canvas coordinates
-    return canvas.height - y * cScale;
+  function convertSimtoCanvasY(y) {		//converts simulation coordinates into canvas coordinates
+    return canvas.height - y * canvasScale;
   }
 
   // ----------------- start of simulator ------------------------------
@@ -124,32 +125,42 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
   //TODO Check if algorithms are focussed on rows first or collumns first
 
   class fluidSim {   //TODO Change name to FluidSim
-    constructor(density, numX, numY, simulationCellSize)                 // TODO numX & numY simulation width or fluid width? can fluid expand? Research
+    constructor(viscosity, density, numX, numY, simCellSize)                 // TODO numX & numY simulation width or fluid width? can fluid expand? Research
     {
+
+      this.numXCells = numX + 2;							//Number of Cells in x Direction; +2 for values at the edge
+      this.numYCells = numY + 2;							//Number of Cells in y Direction; +2 for values at the edge
+      this.numCells = this.numXCells * this.numYCells;			//Total number of cells. necessary to determine size of pressure, velocity etc. fields
+      this.simCellSize = simCellSize;
+      this.cellType = new Float32Array(this.numCells);		//Marker for all cells, 0 for walls and obstacles, 1 for normal cells
+      this.smokeField = new Float32Array(this.numCells);		//Smoke/Mist Field
+      this.newSmokeField = new Float32Array(this.numCells);
+      this.smokeField.fill(1.0)
+
+      //Physical arrays
+      this.viscosity = viscosity;
       this.density = density;
-      this.numX = numX + 2;							//Number of Cells in x Direction; +2 for values at the edge
-      this.numY = numY + 2;							//Number of Cells in y Direction; +2 for values at the edge
-      this.numCells = this.numX * this.numY;			//Total number of cells. necessary to determine size of pressure, velocity etc. fields
-      this.h = simulationCellSize;										//Grid Spacing
-      this.u = new Float32Array(this.numCells);		//Velocity Field in horizontal/X-Direction
-      this.v = new Float32Array(this.numCells);		//Velocity Field in vertical/Y-Direction
-      this.newU = new Float32Array(this.numCells);
-      this.newV = new Float32Array(this.numCells);
+      this.horizontalVelocity = new Float32Array(this.numCells);		//Velocity Field in horizontal/X-Direction
+      this.verticalVelocity = new Float32Array(this.numCells);		//Velocity Field in vertical/Y-Direction
+      this.newHorizontalVelocity = new Float32Array(this.numCells);
+      this.newVerticalVelocity = new Float32Array(this.numCells);
+      this.velocityChange = new Float32Array(this.numCells);
+      this.laplacianHorizontal = new Float32Array(this.numCells);
+      this.laplacianVertical = new Float32Array(this.numCells);
+      this.divergence = new Float32Array(this.numCells).fill(0.0);
       this.pressureField = new Float32Array(this.numCells);		//Pressure Field
-      this.s = new Float32Array(this.numCells);		//Marker for all cells, s=0 for walls, s=1 for normal cells
-      this.m = new Float32Array(this.numCells);		//Smoke/Mist Field
-      this.newM = new Float32Array(this.numCells);
-      this.m.fill(1.0)								//Start with "smoke value" of 1 everywhere
+
+      							//Start with "smoke value" of 1 everywhere
       // var num = numX * numY;							//Number of cells excluding Walls, currently not used
     }
 
     addGravity(dt, gravity)                              //adds gravity to v-component (vertical/Y) of all cells, updates vertical velocity
     {
-      var n = this.numY;                              //! Start loops at 1, for fucks sake!
-      for (var i = 1; i < this.numX; i++) {			//go through all X-Cells (rows)
-        for (var j = 1; j < this.numY - 1; j++) {		//go through all Y-Cells (collumns) in that row
-          if (this.s[i * n + j] != 0.0 && this.s[i * n + j - 1] != 0.0)		//adds gravity if current and next cell are not walls (s!=0.0)
-            this.v[i * n + j] += gravity * dt;                              //Why Type coercion?!
+      var n = this.numYCells;                              //! Start loops at 1, for fucks sake!
+      for (var i = 1; i < this.numXCells; i++) {			//go through all X-Cells (rows)
+        for (var j = 1; j < this.numYCells - 1; j++) {		//go through all Y-Cells (collumns) in that row
+          if (this.cellType[i * n + j] != 0.0 && this.cellType[i * n + j - 1] != 0.0)		//adds gravity if current and next cell are not walls (s!=0.0)
+            this.verticalVelocity[i * n + j] += gravity * dt;                              //Why Type coercion?!
         }
       }
     }
@@ -158,96 +169,96 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     //? Better Version than three for-loops possible?
     forceIncompressibility(numIters, dt) {				//Solves poisson equation and secures incompressible behaviour
       //TODO: Move solving of poisson-equation to its own function. Multiple iterations through all cells
-      var n = this.numY;
-      var currentPressure = densityValue * this.h / dt;			// current static pressure
+      var n = this.numYCells;
+      var currentPressure = densityValue * this.simCellSize / dt;			// current static pressure
 
       for (var iter = 0; iter < numIters; iter++) {    //Multiple iterations
-        for (var i = 1; i < this.numX - 1; i++) {		// Go through all Cells
-          for (var j = 1; j < this.numY - 1; j++) {
+        for (var i = 1; i < this.numXCells - 1; i++) {		// Go through all Cells
+          for (var j = 1; j < this.numYCells - 1; j++) {
 
-            if (this.s[i * n + j] == 0.0)			// If there is a wall at s[i*n+j] go to the next cell
+            if (this.cellType[i * n + j] == 0.0)			// If there is a wall at [i*n+j] go to the next cell
             {
               continue;                            //! continue ends current iteration if reached and starts with the next
             }                                           //? Doubling with condition if (numberFreeEdges == 0.0) ?
 
 
             //var s = this.s[i * n + j];              //not used
-            var sx0 = this.s[(i - 1) * n + j];
-            var sx1 = this.s[(i + 1) * n + j];
-            var sy0 = this.s[i * n + j - 1];
-            var sy1 = this.s[i * n + j + 1];
-            var numberFreeEdges = sx0 + sx1 + sy0 + sy1;		// sum up all values of s.  This s then equals the Number of edges that are NOT walls.
+            var cellType_x0 = this.cellType[(i - 1) * n + j];
+            var cellType_x1 = this.cellType[(i + 1) * n + j];
+            var cellType_y0 = this.cellType[i * n + j - 1];
+            var cellType_y1 = this.cellType[i * n + j + 1];
+            var numberFreeEdges = cellType_x0 + cellType_x1 + cellType_y0 + cellType_y1;		// sum up all values of s.  This s then equals the Number of edges that are NOT walls.
             if (numberFreeEdges == 0.0)						// If all surroounding cells are walls, go to the next cell. edge case for moving obstacles.
             {
               continue;
             }
 
-            var divergence = this.u[(i + 1) * n + j] - this.u[i * n + j] +	//Compute current divergence. Total amount of Out-/Inflow of fluid
-                    this.v[i * n + j + 1] - this.v[i * n + j];
+            var divergence = this.horizontalVelocity[(i + 1) * n + j] - this.horizontalVelocity[i * n + j] +	//Compute current divergence. Total amount of Out-/Inflow of fluid
+                    this.verticalVelocity[i * n + j + 1] - this.verticalVelocity[i * n + j];
 
             var relativeDivergence = -divergence / numberFreeEdges;					// Equal part through each adjacent cells
             relativeDivergence *= scene.overRelaxation;                             // Scale up by overRelaxationFactor for faster convergence
             this.pressureField[i * n + j] += currentPressure * relativeDivergence;  //! Ommits viscosity
 
-            this.u[i * n + j] -= sx0 * relativeDivergence;			//Adjust all velocities so that an equal amount of fluid is pushed out of each cell.
-            this.u[(i + 1) * n + j] += sx1 * relativeDivergence;	//Divergence then becomes Zero. Necessary for incomressible fluids
-            this.v[i * n + j] -= sy0 * relativeDivergence;			// Edges with an associated s value of 0 are walls. therefore no fluid can flow through that edge
-            this.v[i * n + j + 1] += sy1 * relativeDivergence;
+            this.horizontalVelocity[i * n + j] -= cellType_x0 * relativeDivergence;			//Adjust all velocities so that an equal amount of fluid is pushed out of each cell.
+            this.horizontalVelocity[(i + 1) * n + j] += cellTypex1 * relativeDivergence;	//Divergence then becomes Zero. Necessary for incomressible fluids
+            this.verticalVelocity[i * n + j] -= cellTypey0 * relativeDivergence;			// Edges with an associated s value of 0 are walls. therefore no fluid can flow through that edge
+            this.verticalVelocity[i * n + j + 1] += cellTypey1 * relativeDivergence;
           }
         }
       }
     }
 
     applyBoundaryCondition() {				//applies the "no slip" boundary condition to the fluid
-      var n = this.numY;
-      for (var i = 0; i < this.numX; i++) {
-        this.u[i * n + 0] = this.u[i * n + 1];                             //Copy the values of the second row to the top row
-        this.u[i * n + this.numY - 1] = this.u[i * n + this.numY - 2];     //Copy the values of the second-to-last row to the bottom row
+      var n = this.numYCells;
+      for (var i = 0; i < this.numXCells; i++) {
+        this.horizontalVelocity[i * n + 0] = this.horizontalVelocity[i * n + 1];                             //Copy the values of the second row to the top row
+        this.horizontalVelocity[i * n + this.numYCells - 1] = this.horizontalVelocity[i * n + this.numYCells - 2];     //Copy the values of the second-to-last row to the bottom row
       }
-      for (var j = 0; j < this.numY; j++) {
-        this.v[0 * n + j] = this.v[1 * n + j];                             //Copy the values of the second column to the rightmost column
-        this.v[(this.numX - 1) * n + j] = this.v[(this.numX - 2) * n + j]  //Copy the values of the second-to-last column to the leftmost column
+      for (var j = 0; j < this.numYCells; j++) {
+        this.verticalVelocity[0 * n + j] = this.verticalVelocity[1 * n + j];                             //Copy the values of the second column to the rightmost column
+        this.verticalVelocity[(this.numXCells - 1) * n + j] = this.verticalVelocity[(this.numXCells - 2) * n + j]  //Copy the values of the second-to-last column to the leftmost column
       }
     }
 
     sampleField(x, y, field) //Gets a sample value at location [x,y] of the given field, by bilinear interpolation. Interpreted as a weighted mean-value.
     {
-      var n = this.numY;
-      var h = this.h;
+      var n = this.numYCells;
+      var h = this.simCellSize;
       var h1 = 1.0 / h;   //Reciprocal of grid spacing h. Used to convert from physical- to grid-coordinates
       var h2 = 0.5 * h;
 
-      x = Math.max(Math.min(x, this.numX * h), h);  //Get upper bound for x-coordinates: Math.minx(...), get lower bound for x-coordinates: Math.max(...), ensures x is within valid range.
-      y = Math.max(Math.min(y, this.numY * h), h);  //Same in Y-Direction
+      x = Math.max(Math.min(x, this.numXCells * h), h);  //Get upper bound for x-coordinates: Math.minx(...), get lower bound for x-coordinates: Math.max(...), ensures x is within valid range.
+      y = Math.max(Math.min(y, this.numYCells * h), h);  //Same in Y-Direction
 
 
-      var dx = 0.0; //? Sample steps?
+      var dx = 0.0; //Interpolation distances
       var dy = 0.0;
 
-      var f;			//temporary variable the to be sampled field is assigned to
+      var field;			//temporary variable the to be sampled field is assigned to
 
       switch (field) {
-        case U_FIELD:
-          f = this.u;
+        case horizontalVelocity_FIELD_ID:
+          field = this.horizontalVelocity;
           dy = h2;
           break;
-        case V_FIELD:
-          f = this.v;
+        case verticalVelocity_FIELD_ID:
+          field = this.verticalVelocity;
           dx = h2;
           break;
-        case S_FIELD:
-          f = this.m;
+        case smoke_FIELD_ID:
+          field = this.smokeField;
           dx = h2;
           dy = h2;
           break
 
       }
 
-      var x0 = Math.min(Math.floor((x - dx) * h1), this.numX - 1); //Determine left neighbour of cell [x,y]. Flooring to get cell index.
-      var x1 = Math.min(x0 + 1, this.numX - 1);                    //Determine right neighbour
+      var x0 = Math.min(Math.floor((x - dx) * h1), this.numXCells - 1); //Determine left neighbour of cell [x,y]. Flooring to get cell index.
+      var x1 = Math.min(x0 + 1, this.numXCells - 1);                    //Determine right neighbour
 
-      var y0 = Math.min(Math.floor((y - dy) * h1), this.numY - 1); //Determine lower neighbour
-      var y1 = Math.min(y0 + 1, this.numY - 1);                    //Determine upper neighbour
+      var y0 = Math.min(Math.floor((y - dy) * h1), this.numYCells - 1); //Determine lower neighbour
+      var y1 = Math.min(y0 + 1, this.numYCells - 1);                    //Determine upper neighbour
 
       //Calculate bilinear-interpolation weights
       var tx = ((x - dx) - x0 * h) * h1;      //normalized distance lower left corner in x and why direction from point [x,y]
@@ -257,109 +268,110 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
       var sy = 1.0 - ty;
 
       var val;                                //weighted mean of all neighbouring cells of [x,y]
-      val = sx * sy * f[x0 * n + y0] +
-              tx * sy * f[x1 * n + y0] +
-              tx * ty * f[x1 * n + y1] +
-              sx * ty * f[x0 * n + y1];
+      val = sx * sy * field[x0 * n + y0] +
+              tx * sy * field[x1 * n + y0] +
+              tx * ty * field[x1 * n + y1] +
+              sx * ty * field[x0 * n + y1];
 
       return val;
     }
 
-    avgU(i, j) {			//Weighted-Average all u-components adjacent to the cell [i,j]
-      var n = this.numY;
-      var u = (this.u[i * n + j - 1] + this.u[i * n + j] +
-              this.u[(i + 1) * n + j - 1] + this.u[(i + 1) * n + j]) * 0.25; //Why only right neighbour-cell weighted?
-      return u;
+    avgHorizontalVel(i, j) {			//Weighted-Average all HorVel-components adjacent to the cell [i,j]
+      var n = this.numYCells;
+      var avgHorVel = (this.horizontalVelocity[i * n + j - 1] + this.horizontalVelocity[i * n + j] +
+              this.horizontalVelocity[(i + 1) * n + j - 1] + this.horizontalVelocity[(i + 1) * n + j]) * 0.25; //Why only right neighbour-cell weighted?
+      return avgHorVel;
 
     }
 
-    avgV(i, j) {			//Weighted-Average all v-components adjacent to the cell [i,j]
-      var n = this.numY;
-      var v = (this.v[(i - 1) * n + j] + this.v[i * n + j] +
-              this.v[(i - 1) * n + j + 1] + this.v[i * n + j + 1]) * 0.25;        //Why only upper neighbour cell weighted?
-      return v;
+    avgVerticalVel(i, j) {			//Weighted-Average all VerVel-components adjacent to the cell [i,j]
+      var n = this.numYCells;
+      var avgVerVel = (this.verticalVelocity[(i - 1) * n + j] + this.verticalVelocity[i * n + j] +
+              this.verticalVelocity[(i - 1) * n + j + 1] + this.verticalVelocity[i * n + j + 1]) * 0.25;        //Why only upper neighbour cell weighted?
+      return avgVerVel;
     }
 
     advectVelocity(dt) {			//Moves velocity field by a timestep dt to simulate moving particles by Semi-Lagrangian Advection
 
-      this.newU.set(this.u);
-      this.newV.set(this.v);
+      this.newHorizontalVelocity.set(this.horizontalVelocity);
+      this.newVerticalVelocity.set(this.verticalVelocity);
 
-      var n = this.numY;
-      var h = this.h;			//Grid Spacing
+      var n = this.numYCells;
+      var h = this.simCellSize;
       var h2 = 0.5 * h;
 
-      for (var i = 1; i < this.numX; i++) {		//Go through all cells
-        for (var j = 1; j < this.numY; j++) {
+      for (var i = 1; i < this.numXCells; i++) {		//Go through all cells
+        for (var j = 1; j < this.numYCells; j++) {
 
           cnt++; //? What for? Debugging?
 
           // advect u component
-          if (this.s[i * n + j] != 0.0 && this.s[(i - 1) * n + j] != 0.0 && j < this.numY - 1) {              //check for obstacles and walls
+          if (this.cellType[i * n + j] != 0.0 && this.cellType[(i - 1) * n + j] != 0.0 && j < this.numYCells - 1) {              //check for obstacles and walls
             let x = i * h;				                                                                    //Determine current  x-coordinate in terms of the grid
             let y = j * h + h2;			                                                                    //?Same as x, add half a spaceing. Why an extra half step?
-            let u = this.u[i * n + j];	                                                                    //Get u-velocity at [i,j] / current position
-            let v = this.avgV(i, j);	                                                                    //Average v-velocity around [i,j] / current position
-            //var v = this.sampleField(x,y, V_FIELD); Option: sample instead of average
+            let u = this.horizontalVelocity[i * n + j];	                                                                    //Get u-velocity at [i,j] / current position
+            let v = this.avgVerticalVel(i, j);	                                                                    //Average v-velocity around [i,j] / current position
+            //var v = this.sampleField(x,y, verticalVelocity_FIELD_ID); Option: sample instead of average
             x = x - dt * u;				                                                                    //Determine previous position of the velocity currently stored in [i,j] /current position
             y = y - dt * v;
-            u = this.sampleField(x, y, U_FIELD);		                                                    //Sample field at the previous position
-            this.newU[i * n + j] = u;					                                                    //Set new value of the u-field at the current position [i,j] to the value it had in
+            u = this.sampleField(x, y, horizontalVelocity_FIELD_ID);		                                                    //Sample field at the previous position
+            this.newHorizontalVelocity[i * n + j] = u;					                                                    //Set new value of the u-field at the current position [i,j] to the value it had in
           }                                                                                                   //the cell where that velocity it "came from". Store this in a separate field.
                                                                                                               // I.e: calculate new velocity fieldHow
 
           // same as above for v-component
-          if (this.s[i * n + j] != 0.0 && this.s[i * n + j - 1] != 0.0 && i < this.numX - 1) {
+          if (this.cellType[i * n + j] != 0.0 && this.cellType[i * n + j - 1] != 0.0 && i < this.numXCells - 1) {
             let x = i * h + h2;
             let y = j * h;
-            var v = this.v[i * n + j];
-            let u = this.avgU(i, j);
-            // var u = this.sampleField(x,y, U_FIELD); Option: sample instead of average, worse performance?
+            var v = this.verticalVelocity[i * n + j];
+            let u = this.avgHorizontalVel(i, j);
+            // var u = this.sampleField(x,y, horizontalVelocity_FIELD_ID); Option: sample instead of average, worse performance?
             x = x - dt * u;
             y = y - dt * v;
-            v = this.sampleField(x, y, V_FIELD);
-            this.newV[i * n + j] = v;
+            v = this.sampleField(x, y, verticalVelocity_FIELD_ID);
+            this.newVerticalVelocity[i * n + j] = v;
           }
         }
       }
 
-      this.u.set(this.newU);      //Update the old velocity fields.
-      this.v.set(this.newV);
+      this.horizontalVelocity.set(this.newHorizontalVelocity);      //Update the old velocity fields.
+      this.verticalVelocity.set(this.newVerticalVelocity);
     }
 
     advectSmoke(dt) { //Same logic as in advectVel
 
-      this.newM.set(this.m);
+      this.newSmokeField.set(this.smokeField);
 
-      var n = this.numY;
-      var h = this.h;
+      var n = this.numYCells;
+      var h = this.simCellSize;
       var h2 = 0.5 * h;
 
-      for (var i = 1; i < this.numX - 1; i++) //Go through all cells
+      for (var i = 1; i < this.numXCells - 1; i++) //Go through all cells
       {
-        for (var j = 1; j < this.numY - 1; j++) {
+        for (var j = 1; j < this.numYCells - 1; j++) {
 
-          if (this.s[i * n + j] != 0.0)  //if the cell is not a wall
+          if (this.cellType[i * n + j] != 0.0)  //if the cell is not a wall
           {
-            var u = (this.u[i * n + j] + this.u[(i + 1) * n + j]) * 0.5;        //TODO Why half thee value of the cell the cell to the right?
-            var v = (this.v[i * n + j] + this.v[i * n + j + 1]) * 0.5;
+            var u = (this.horizontalVelocity[i * n + j] + this.horizontalVelocity[(i + 1) * n + j]) * 0.5;        //TODO Why half thee value of the cell the cell to the right?
+            var v = (this.verticalVelocity[i * n + j] + this.verticalVelocity[i * n + j + 1]) * 0.5;
             var x = i * h + h2 - dt * u;                                        //Get indices of previous cell location
             var y = j * h + h2 - dt * v;
 
-            this.newM[i * n + j] = this.sampleField(x, y, S_FIELD);             //Advect
+            this.newSmokeField[i * n + j] = this.sampleField(x, y, smoke_FIELD_ID);             //Advect
           }
         }
       }
-      this.m.set(this.newM);
+      this.smokeField.set(this.newSmokeField);
     }
 
     // ----------------- end of simulator ------------------------------
 
 
     performSimulationStep(dt, gravity, numIters) {
-
+      this.velocityChange.fill(0.0);                //clear velocity change array
+      //Determine all changes in velocity, then add everything else
       this.addGravity(dt, gravity);
-
+      //var div = computeDiv();
       this.pressureField.fill(0.0);				//? Starting with Zero pressure, make changeable
       this.forceIncompressibility(numIters, dt);
 
@@ -416,21 +428,21 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
     f = scene.fluid = new fluidSim(density, numX, numY, h);		    //Scene starts without a fluid, give it one
 
-    var n = f.numY;
+    var n = f.numYCells;
 
     //TODO Decouple from Hard Code, add more scenes. Scenes stored in Database
     //Go through all cells
     if (sceneNr == 0) {   		// tank
 
-      for (var i = 0; i < f.numX; i++) {
-        for (var j = 0; j < f.numY; j++)
+      for (var i = 0; i < f.numXCells; i++) {
+        for (var j = 0; j < f.numYCells; j++)
         {
           var s = 1.0;
-          if (i == 0 || i == f.numX - 1 || j == 0)	        //Mark bottom and edges as solid
+          if (i == 0 || i == f.numXCells - 1 || j == 0)	        //Mark bottom and edges as solid
           {
             s = 0.0;
           }
-          f.s[i * n + j] = s                                  //Mark everything else as fluid
+          f.cellType[i * n + j] = s                                  //Mark everything else as fluid
         }
       }
 
@@ -444,29 +456,29 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     {
 
       var inVel = 2.0;									//TODO initial Velocity, make changeable
-      for (var i = 0; i < f.numX; i++)                    //Go through all cells
+      for (var i = 0; i < f.numXCells; i++)                    //Go through all cells
       {
-        for (var j = 0; j < f.numY; j++) {
+        for (var j = 0; j < f.numYCells; j++) {
           var s = 1.0;
-          if (i == 0 || j == 0 || j == f.numY - 1)	//Mark edges and bottom as solid
+          if (i == 0 || j == 0 || j == f.numYCells - 1)	//Mark edges and bottom as solid
           {
             s = 0.0;	// solid
           }
-          f.s[i * n + j] = s							//Mark everything as fluid
+          f.cellType[i * n + j] = s							//Mark everything as fluid
           if (i == 1)                                 //Set velocity in the first column to 'inVel'
           {
-            f.u[i * n + j] = inVel;
+            f.horizontalVelocity[i * n + j] = inVel;
           }
         }
       }
 
-      var pipeH = 0.1 * f.numY;							//TODO Make changeable. Diameter of the wind-pipe
-      var minJ = Math.floor(0.5 * f.numY - 0.5 * pipeH);  //Starting height of smoke tunnel. Changes position
-      var maxJ = Math.floor(0.5 * f.numY + 0.5 * pipeH);  //End height. Make narrower/wider
+      var pipeH = 0.1 * f.numYCells;							//TODO Make changeable. Diameter of the wind-pipe
+      var minJ = Math.floor(0.5 * f.numYCells - 0.5 * pipeH);  //Starting height of smoke tunnel. Changes position
+      var maxJ = Math.floor(0.5 * f.numYCells + 0.5 * pipeH);  //End height. Make narrower/wider
 
       for (var j = minJ; j < maxJ; j++)			//Makes smoke in the middle of the lefthand wall
       {                                           //TODO Add second loop, so that it is not only on the wall
-        f.m[j] = 0.0;
+        f.smokeField[j] = 0.0;
       }
 
       setObstacle(0.4, 0.5, true)                 //Sets initial obstacle position and visible
@@ -560,9 +572,9 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
     c.fillStyle = "#FF0000";                                    //Fill red
     f = scene.fluid;                                            //Take the fluid from the scene
-    n = f.numY;                                                 //Grid Height
+    n = f.numYCells;                                                 //Grid Height
     var cellScale = 1.1;                                        //TODO Make adjustable Scaling factor
-    var h = f.h;                                                //Grid Spacing
+    var h = f.simCellSize;                                                //Grid Spacing
 
     minP = f.pressureField[0];                                              //set 'minP' to pressure value of the first cell. To have a starting value to compare
     maxP = f.pressureField[0];                                              //set 'maxP' to pressure value of the first cell.
@@ -576,13 +588,13 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     var rgb_colorArray = [255, 255, 255, 255]                            //color array far later reference of values
 
     //Go through all cells
-    for (var i = 0; i < f.numX; i++) {
-      for (var j = 0; j < f.numY; j++) {
+    for (var i = 0; i < f.numXCells; i++) {
+      for (var j = 0; j < f.numYCells; j++) {
 
         if (scene.showPressure) {    //If tickbox 'show Pressure' is selected.
 
           var p = f.pressureField[i * n + j];         //Go through pressure field
-          var saturation = f.m[i * n + j];         //s = saturation. Go through smoke field
+          var saturation = f.smokeField[i * n + j];         //s = saturation. Go through smoke field
           rgb_colorArray = getSciColor(p, minP, maxP);     //! Currently only gets pressure from p.[0]
           if (scene.showSmoke)                    //? Maybe as ternary operation instead of two 'if-statements'?
           {
@@ -592,7 +604,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             rgb_colorArray[2] = Math.max(0.0, rgb_colorArray[2] - 255 * saturation);
           }
         } else if (scene.showSmoke) {
-          var s = f.m[i * n + j];     //adjust colours with saturation at the current point in the field
+          var s = f.smokeField[i * n + j];     //adjust colours with saturation at the current point in the field
           rgb_colorArray[0] = 255 * s;
           rgb_colorArray[1] = 255 * s;
           rgb_colorArray[2] = 255 * s;
@@ -602,18 +614,18 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
         }
         //Colour the borders and bostacles black
-        else if (f.s[i * n + j] == 0.0) {
+        else if (f.cellType[i * n + j] == 0.0) {
           rgb_colorArray[0] = 0;
           rgb_colorArray[1] = 0;
           rgb_colorArray[2] = 0;
         }
 
-        var x = Math.floor(cX(i * h));                      //convert simulation coords to canvas cords
-        var y = Math.floor(cY((j + 1) * h));
-        var cx = Math.floor(cScale * cellScale * h) + 1;    //Size of the canvas square in x direction. cx = canvas-Y
-        var cy = Math.floor(cScale * cellScale * h) + 1;    //same for y
+        var x = Math.floor(convertSimToCanvasX(i * h));                      //convert simulation coords to canvas cords
+        var y = Math.floor(convertSimtoCanvasY((j + 1) * h));
+        var cx = Math.floor(canvasScale * cellScale * h) + 1;    //Size of the canvas square in x direction. cx = canvas-Y
+        var cy = Math.floor(canvasScale * cellScale * h) + 1;    //same for y
                                                             //TODO better performance with just cy = cx?
-                                                            //cellScale and cScale (canvas scale) just as arbitrary scaling factors
+                                                            //cellScale and canvasScale (canvas scale) just as arbitrary scaling factors
 
         r = rgb_colorArray[0];
         g = rgb_colorArray[1];
@@ -640,25 +652,25 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
       c.strokeStyle = "#000000";
       scale = 0.02;
 
-      for (var i = 0; i < f.numX; i++) {
-        for (var j = 0; j < f.numY; j++) {
+      for (var i = 0; i < f.numXCells; i++) {
+        for (var j = 0; j < f.numYCells; j++) {
 
-          var u = f.u[i * n + j];
-          var v = f.v[i * n + j];
+          var u = f.horizontalVelocity[i * n + j];
+          var v = f.verticalVelocity[i * n + j];
 
           c.beginPath();
 
-          x0 = cX(i * h);
-          x1 = cX(i * h + u * scale);
-          y = cY((j + 0.5) * h);
+          x0 = convertSimToCanvasX(i * h);
+          x1 = convertSimToCanvasX(i * h + u * scale);
+          y = convertSimtoCanvasY((j + 0.5) * h);
 
           c.moveTo(x0, y);
           c.lineTo(x1, y);
           c.stroke();
 
-          x = cX((i + 0.5) * h);
-          y0 = cY(j * h);
-          y1 = cY(j * h + v * scale)
+          x = convertSimToCanvasX((i + 0.5) * h);
+          y0 = convertSimtoCanvasY(j * h);
+          y1 = convertSimtoCanvasY(j * h + v * scale)
 
           c.beginPath();
           c.moveTo(x, y0);
@@ -671,33 +683,33 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
     if (scene.showStreamlines) {
 
-      var segLen = f.h * 0.2;  //Segment length? Not used
+      var segLen = f.simCellSize * 0.2;  //Segment length? Not used
       var numSegs = 5;         //Iteration length for drawing streamline. The biger the longer a streamline.
       //Lower means more individual streamlines.
       c.strokeStyle = "#000000";      //Streamline color
 
-      for (var i = 1; i < f.numX - 1; i += 5)         //Start a streamline at every fifth cell
+      for (var i = 1; i < f.numXCells - 1; i += 5)         //Start a streamline at every fifth cell
       {                                               //TODO Make step-size changeable / controll streamline density
-        for (var j = 1; j < f.numY - 1; j += 5) {
+        for (var j = 1; j < f.numYCells - 1; j += 5) {
 
-          var x = (i + 0.5) * f.h;
-          var y = (j + 0.5) * f.h;
+          var x = (i + 0.5) * f.simCellSize;
+          var y = (j + 0.5) * f.simCellSize;
 
           c.beginPath();                          //Clear list of sub-paths and start a new one
-          c.moveTo(cX(x), cY(y));                 //at position [x,y]
+          c.moveTo(convertSimToCanvasX(x), convertSimtoCanvasY(y));                 //at position [x,y]
 
           for (var n = 0; n < numSegs; n++) {
-            var u = f.sampleField(x, y, U_FIELD);
-            var v = f.sampleField(x, y, V_FIELD);
+            var u = f.sampleField(x, y, horizontalVelocity_FIELD_ID);
+            var v = f.sampleField(x, y, verticalVelocity_FIELD_ID);
             var l = Math.sqrt(u * u + v * v);
             // x += u/l * segLen;
             // y += v/l * segLen;
             x += u * 0.01;                      //Move coordinate along with a time step of 0.01
             y += v * 0.01;                      //TODO Make consistent with general timestep
-            if (x > f.numX * f.h) {             //Stop if out of bounce
+            if (x > f.numXCells * f.simCellSize) {             //Stop if out of bounce
               break;
             }
-            c.lineTo(cX(x), cY(y));             //take the new position as endpoint of the line
+            c.lineTo(convertSimToCanvasX(x), convertSimtoCanvasY(y));             //take the new position as endpoint of the line
           }
           c.stroke();                             //Actually draw the line on the canvas
         }
@@ -705,7 +717,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     }
 
     if (scene.showObstacle) {               //Adjusts obstacle size depending on the grid spacing
-      radius = scene.obstacleRadius + f.h;     //Grid spacing dependent on browser size
+      radius = scene.obstacleRadius + f.simCellSize;     //Grid spacing dependent on browser size
       if (scene.showPressure) {
         c.fillStyle = "#000000";        //Set fill colour to black if 'show Pressure' is selected
       }
@@ -714,7 +726,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
       }
       //Draws half a circle and fills it
       c.beginPath();
-      c.arc(cX(scene.obstacleX), cY(scene.obstacleY), cScale * radius, 0.0, 2.0 * Math.PI);
+      c.arc(convertSimToCanvasX(scene.obstacleX), convertSimtoCanvasY(scene.obstacleY), canvasScale * radius, 0.0, 2.0 * Math.PI);
       c.closePath();
       c.fill();
 
@@ -722,7 +734,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
       c.lineWidth = 3.0; //!Unnecessary
       c.strokeStyle = "#000000";          //! Make a black edge. cool
       c.beginPath();
-      c.arc(cX(scene.obstacleX), cY(scene.obstacleY), cScale * radius, 0.0, 2.0 * Math.PI);
+      c.arc(convertSimToCanvasX(scene.obstacleX), convertSimtoCanvasY(scene.obstacleY), canvasScale * radius, 0.0, 2.0 * Math.PI);
       c.closePath();
       c.stroke();
       c.lineWidth = 1.0;  //!Unnecessary
@@ -754,31 +766,31 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     scene.obstacleY = y;
     var r = scene.obstacleRadius;
     var f = scene.fluid;
-    var n = f.numY;
-    var cd = Math.sqrt(2) * f.h;  //!Never used. Length of the diagonal of a cell
+    var n = f.numYCells;
+    var cd = Math.sqrt(2) * f.simCellSize;  //!Never used. Length of the diagonal of a cell
 
-    for (var i = 1; i < f.numX - 2; i++)        //Go through all cells
+    for (var i = 1; i < f.numXCells - 2; i++)        //Go through all cells
     {
-      for (var j = 1; j < f.numY - 2; j++) {
+      for (var j = 1; j < f.numYCells - 2; j++) {
 
-        f.s[i * n + j] = 1.0;               //Mark every cell as fluid
-        dx = (i + 0.5) * f.h - x;
-        dy = (j + 0.5) * f.h - y;
+        f.cellType[i * n + j] = 1.0;               //Mark every cell as fluid
+        dx = (i + 0.5) * f.simCellSize - x;
+        dy = (j + 0.5) * f.simCellSize - y;
         //! Currently only works for circles
         if (dx * dx + dy * dy < r * r) {        // if the cell is within the outline of the circle
-          f.s[i * n + j] = 0.0;               //mark it as solid
+          f.cellType[i * n + j] = 0.0;               //mark it as solid
           if (scene.sceneNr == 2) {
-            f.m[i * n + j] = 0.5 + 0.5 * Math.sin(0.1 * scene.frameNr)  //Vary smoke opacity if the current cell is solid.
+            f.smokeField[i * n + j] = 0.5 + 0.5 * Math.sin(0.1 * scene.frameNr)  //Vary smoke opacity if the current cell is solid.
           }                                                               //This visualizes the dispersing of the the smoke, when it hits an object
           else {
-            f.m[i * n + j] = 1.0;
+            f.smokeField[i * n + j] = 1.0;
           }
           //Set the value of the velocity field to the speed of the obstacle, when it is within the outline of the obstacle
-          f.u[i * n + j] = vx;
-          f.u[i * n + j] = vx;
-          f.u[(i + 1) * n + j] = vx;
-          f.v[i * n + j] = vy;
-          f.v[i * n + j + 1] = vy;
+          f.horizontalVelocity[i * n + j] = vx;
+          f.horizontalVelocity[i * n + j] = vx;
+          f.horizontalVelocity[(i + 1) * n + j] = vx;
+          f.verticalVelocity[i * n + j] = vy;
+          f.verticalVelocity[i * n + j + 1] = vy;
         }
       }
     }
@@ -797,8 +809,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     let my = y - bounds.top - canvas.clientTop;
     mouseDown = true;
 
-    x = mx / cScale;                                //
-    y = (canvas.height - my) / cScale;
+    x = mx / canvasScale;                                //
+    y = (canvas.height - my) / canvasScale;
 
     setObstacle(x, y, true);                        //set obstacle to updated position
   }
@@ -808,8 +820,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
       let bounds = canvas.getBoundingClientRect();
       let mx = x - bounds.left - canvas.clientLeft;
       let my = y - bounds.top - canvas.clientTop;
-      x = mx / cScale;
-      y = (canvas.height - my) / cScale;
+      x = mx / canvasScale;
+      y = (canvas.height - my) / canvasScale;
       setObstacle(x, y, false);
     }
   }
