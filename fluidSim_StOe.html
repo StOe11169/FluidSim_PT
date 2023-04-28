@@ -414,23 +414,23 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
     var density = densityValue;										//TODO Make changeable
 
-    currentSim = scene.fluidSim = new FluidSim(density, numX, numY, h);		    //Scene starts without a fluid, give it one
+    fluidSimSetup = scene.fluidSim = new FluidSim(density, numX, numY, h);		    //Scene starts without a fluid, give it one
 
-    var n = currentSim.numYCells;
+    var n = fluidSimSetup.numYCells;
 
     //TODO Decouple from Hard Code, add more scenes. Scenes stored in Database
     //Go through all cells
     if (sceneNr == 0) {   		// tank
 
-      for (var i = 0; i < currentSim.numXCells; i++) {
-        for (var j = 0; j < currentSim.numYCells; j++)
+      for (var i = 0; i < fluidSimSetup.numXCells; i++) {
+        for (var j = 0; j < fluidSimSetup.numYCells; j++)
         {
           var cellType = 1.0;
-          if (i == 0 || i == currentSim.numXCells - 1 || j == 0)	        //Mark bottom and edges as solid
+          if (i == 0 || i == fluidSimSetup.numXCells - 1 || j == 0)	        //Mark bottom and edges as solid
           {
             cellType = 0.0;
           }
-          currentSim.cellType[i * n + j] = cellType                                  //Mark everything else as fluid
+          fluidSimSetup.cellType[i * n + j] = cellType                                  //Mark everything else as fluid
         }
       }
 
@@ -444,29 +444,29 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     {
 
       var inVel = 2.0;									//TODO initial Velocity, make changeable
-      for (var i = 0; i < currentSim.numXCells; i++)                    //Go through all cells
+      for (var i = 0; i < fluidSimSetup.numXCells; i++)                    //Go through all cells
       {
-        for (var j = 0; j < currentSim.numYCells; j++) {
+        for (var j = 0; j < fluidSimSetup.numYCells; j++) {
           var cellType = 1.0;
-          if (i == 0 || j == 0 || j == currentSim.numYCells - 1)	//Mark edges and bottom as solid
+          if (i == 0 || j == 0 || j == fluidSimSetup.numYCells - 1)	//Mark edges and bottom as solid
           {
             cellType = 0.0;	// solid
           }
-          currentSim.cellType[i * n + j] = cellType							//Mark everything as fluid
+          fluidSimSetup.cellType[i * n + j] = cellType							//Mark everything as fluid
           if (i == 1)                                 //Set velocity in the first column to 'inVel'
           {
-            currentSim.u[i * n + j] = inVel;
+            fluidSimSetup.u[i * n + j] = inVel;
           }
         }
       }
 
-      var pipeH = 0.1 * currentSim.numYCells;							//TODO Make changeable. Diameter of the wind-pipe
-      var minJ = Math.floor(0.5 * currentSim.numYCells - 0.5 * pipeH);  //Starting height of smoke tunnel. Changes position
-      var maxJ = Math.floor(0.5 * currentSim.numYCells + 0.5 * pipeH);  //End height. Make narrower/wider
+      var pipeH = 0.1 * fluidSimSetup.numYCells;							//TODO Make changeable. Diameter of the wind-pipe
+      var minJ = Math.floor(0.5 * fluidSimSetup.numYCells - 0.5 * pipeH);  //Starting height of smoke tunnel. Changes position
+      var maxJ = Math.floor(0.5 * fluidSimSetup.numYCells + 0.5 * pipeH);  //End height. Make narrower/wider
 
       for (var j = minJ; j < maxJ; j++)			//Makes smoke in the middle of the lefthand wall
       {                                           //TODO Add second loop, so that it is not only on the wall
-        currentSim.smokeField[j] = 0.0;
+        fluidSimSetup.smokeField[j] = 0.0;
       }
 
       setObstacle(0.4, 0.5, true)                 //Sets initial obstacle position and visible
@@ -559,31 +559,31 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     c.clearRect(0, 0, canvas.width, canvas.height);             //Start with a blank canvas
 
     c.fillStyle = "#FF0000";                                    //Fill red
-    f = scene.fluidSim;                                            //Take the fluid from the scene
-    n = f.numYCells;                                                 //Grid Height
+    fluidSimDraw = scene.fluidSim;                                            //Take the fluid from the scene
+    n = fluidSimDraw.numYCells;                                                 //Grid Height
     var cellScale = 1.1;                                        //TODO Make adjustable Scaling factor
-    var h = f.cellSize;                                                //Grid Spacing
+    var h = fluidSimDraw.cellSize;                                                //Grid Spacing
 
-    minP = f.pressureField[0];                                              //set 'minP' to pressure value of the first cell. To have a starting value to compare
-    maxP = f.pressureField[0];                                              //set 'maxP' to pressure value of the first cell.
+    minP = fluidSimDraw.pressureField[0];                                              //set 'minP' to pressure value of the first cell. To have a starting value to compare
+    maxP = fluidSimDraw.pressureField[0];                                              //set 'maxP' to pressure value of the first cell.
 
-    for (var i = 0; i < f.numCells; i++) {                      //Go through each cell. Compare and update 'minP' and 'maxP'
-      minP = Math.min(minP, f.pressureField[i]);
-      maxP = Math.max(maxP, f.pressureField[i]);
+    for (var i = 0; i < fluidSimDraw.numCells; i++) {                      //Go through each cell. Compare and update 'minP' and 'maxP'
+      minP = Math.min(minP, fluidSimDraw.pressureField[i]);
+      maxP = Math.max(maxP, fluidSimDraw.pressureField[i]);
     }
 
     imageData = c.getImageData(0, 0, canvas.width, canvas.height)
     var rgb_colorArray = [255, 255, 255, 255]                            //color array far later reference of values
 
     //Go through all cells
-    for (var i = 0; i < f.numXCells; i++) {
-      for (var j = 0; j < f.numYCells; j++) {
+    for (var i = 0; i < fluidSimDraw.numXCells; i++) {
+      for (var j = 0; j < fluidSimDraw.numYCells; j++) {
 
         if (scene.showPressure) {    //If tickbox 'show Pressure' is selected.
 
-          var p = f.pressureField[i * n + j];         //Go through pressure field
-          var saturation = f.smokeField[i * n + j];         //s = saturation. Go through smoke field
-          rgb_colorArray = getSciColor(p, minP, maxP);     //! Currently only gets pressure from p.[0]
+          var pressure = fluidSimDraw.pressureField[i * n + j];         //Go through pressure field
+          var saturation = fluidSimDraw.smokeField[i * n + j];         //s = saturation. Go through smoke field
+          rgb_colorArray = getSciColor(pressure, minP, maxP);     //! Currently only gets pressure from p.[0]
           if (scene.showSmoke)                    //? Maybe as ternary operation instead of two 'if-statements'?
           {
             //adjust colours with saturation at the current point in the field
@@ -592,17 +592,17 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             rgb_colorArray[2] = Math.max(0.0, rgb_colorArray[2] - 255 * saturation);
           }
         } else if (scene.showSmoke) {
-          var s = f.smokeField[i * n + j];     //adjust colours with saturation at the current point in the field
-          rgb_colorArray[0] = 255 * s;
-          rgb_colorArray[1] = 255 * s;
-          rgb_colorArray[2] = 255 * s;
+          var smokeOpacity = fluidSimDraw.smokeField[i * n + j];     //adjust colours with saturation at the current point in the field
+          rgb_colorArray[0] = 255 * smokeOpacity;
+          rgb_colorArray[1] = 255 * smokeOpacity;
+          rgb_colorArray[2] = 255 * smokeOpacity;
           if (scene.sceneNr == 2) {
-            rgb_colorArray = getSciColor(s, 0.0, 1.0);
+            rgb_colorArray = getSciColor(smokeOpacity, 0.0, 1.0);
           }
 
         }
         //Colour the borders and bostacles black
-        else if (f.cellType[i * n + j] == 0.0) {
+        else if (fluidSimDraw.cellType[i * n + j] == 0.0) {
           rgb_colorArray[0] = 0;
           rgb_colorArray[1] = 0;
           rgb_colorArray[2] = 0;
@@ -640,11 +640,11 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
       c.strokeStyle = "#000000";
       scale = 0.02;
 
-      for (var i = 0; i < f.numXCells; i++) {
-        for (var j = 0; j < f.numYCells; j++) {
+      for (var i = 0; i < fluidSimDraw.numXCells; i++) {
+        for (var j = 0; j < fluidSimDraw.numYCells; j++) {
 
-          var u = f.u[i * n + j];
-          var v = f.v[i * n + j];
+          var u = fluidSimDraw.u[i * n + j];
+          var v = fluidSimDraw.v[i * n + j];
 
           c.beginPath();
 
@@ -671,30 +671,30 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
     if (scene.showStreamlines) {
 
-      var segLen = f.cellSize * 0.2;  //Segment length? Not used
+      var segLen = fluidSimDraw.cellSize * 0.2;  //Segment length? Not used
       var numSegs = 5;         //Iteration length for drawing streamline. The biger the longer a streamline.
       //Lower means more individual streamlines.
       c.strokeStyle = "#000000";      //Streamline color
 
-      for (var i = 1; i < f.numXCells - 1; i += 5)         //Start a streamline at every fifth cell
+      for (var i = 1; i < fluidSimDraw.numXCells - 1; i += 5)         //Start a streamline at every fifth cell
       {                                               //TODO Make step-size changeable / controll streamline density
-        for (var j = 1; j < f.numYCells - 1; j += 5) {
+        for (var j = 1; j < fluidSimDraw.numYCells - 1; j += 5) {
 
-          var x = (i + 0.5) * f.cellSize;
-          var y = (j + 0.5) * f.cellSize;
+          var x = (i + 0.5) * fluidSimDraw.cellSize;
+          var y = (j + 0.5) * fluidSimDraw.cellSize;
 
           c.beginPath();                          //Clear list of sub-paths and start a new one
           c.moveTo(simToCanvasX(x), simToCanvasY(y));                 //at position [x,y]
 
           for (var n = 0; n < numSegs; n++) {
-            var u = f.sampleField(x, y, U_FIELD);
-            var v = f.sampleField(x, y, V_FIELD);
+            var u = fluidSimDraw.sampleField(x, y, U_FIELD);
+            var v = fluidSimDraw.sampleField(x, y, V_FIELD);
             var l = Math.sqrt(u * u + v * v);
             // x += u/l * segLen;
             // y += v/l * segLen;
             x += u * 0.01;                      //Move coordinate along with a time step of 0.01
             y += v * 0.01;                      //TODO Make consistent with general timestep
-            if (x > f.numXCells * f.cellSize) {             //Stop if out of bounce
+            if (x > fluidSimDraw.numXCells * fluidSimDraw.cellSize) {             //Stop if out of bounce
               break;
             }
             c.lineTo(simToCanvasX(x), simToCanvasY(y));             //take the new position as endpoint of the line
@@ -705,7 +705,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     }
 
     if (scene.showObstacle) {               //Adjusts obstacle size depending on the grid spacing
-      radius = scene.obstacleRadius + f.cellSize;     //Grid spacing dependent on browser size
+      radius = scene.obstacleRadius + fluidSimDraw.cellSize;     //Grid spacing dependent on browser size
       if (scene.showPressure) {
         c.fillStyle = "#000000";        //Set fill colour to black if 'show Pressure' is selected
       }
@@ -742,43 +742,43 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
   //-----------------------end of draw function ----------------------------------------
   function setObstacle(x, y, reset) {     //x and y = center position of the obstacle
     //! What causes a reset?
-    var vx = 0.0;                       //initial Object velocities?
-    var vy = 0.0;
+    var obstacleVelX = 0.0;                       //initial Object velocities
+    var obstacleVelY = 0.0;
 
     if (!reset) {                       //Calculate object velocity
-      vx = (x - scene.obstacleX) / scene.dt;
-      vy = (y - scene.obstacleY) / scene.dt;
+      obstacleVelX = (x - scene.obstacleX) / scene.dt;
+      obstacleVelY = (y - scene.obstacleY) / scene.dt;
     }
 
     scene.obstacleX = x;                //Set new location
     scene.obstacleY = y;
     var r = scene.obstacleRadius;
-    var f = scene.fluidSim;
-    var n = f.numYCells;
-    var cd = Math.sqrt(2) * f.cellSize;  //!Never used. Length of the diagonal of a cell
+    var fluidSimSetObstacle = scene.fluidSim;
+    var n = fluidSimSetObstacle.numYCells;
+    var cd = Math.sqrt(2) * fluidSimSetObstacle.cellSize;  //!Never used. Length of the diagonal of a cell
 
-    for (var i = 1; i < f.numXCells - 2; i++)        //Go through all cells
+    for (var i = 1; i < fluidSimSetObstacle.numXCells - 2; i++)        //Go through all cells
     {
-      for (var j = 1; j < f.numYCells - 2; j++) {
+      for (var j = 1; j < fluidSimSetObstacle.numYCells - 2; j++) {
 
-        f.cellType[i * n + j] = 1.0;               //Mark every cell as fluid
-        dx = (i + 0.5) * f.cellSize - x;
-        dy = (j + 0.5) * f.cellSize - y;
+        fluidSimSetObstacle.cellType[i * n + j] = 1.0;               //Mark every cell as fluid
+        dx = (i + 0.5) * fluidSimSetObstacle.cellSize - x;
+        dy = (j + 0.5) * fluidSimSetObstacle.cellSize - y;
         //! Currently only works for circles
         if (dx * dx + dy * dy < r * r) {        // if the cell is within the outline of the circle
-          f.cellType[i * n + j] = 0.0;               //mark it as solid
+          fluidSimSetObstacle.cellType[i * n + j] = 0.0;               //mark it as solid
           if (scene.sceneNr == 2) {
-            f.smokeField[i * n + j] = 0.5 + 0.5 * Math.sin(0.1 * scene.frameNr)  //Vary smoke opacity if the current cell is solid.
+            fluidSimSetObstacle.smokeField[i * n + j] = 0.5 + 0.5 * Math.sin(0.1 * scene.frameNr)  //Vary smoke opacity if the current cell is solid.
           }                                                               //This visualizes the dispersing of the the smoke, when it hits an object
           else {
-            f.smokeField[i * n + j] = 1.0;
+            fluidSimSetObstacle.smokeField[i * n + j] = 1.0;
           }
           //Set the value of the velocity field to the speed of the obstacle, when it is within the outline of the obstacle
-          f.u[i * n + j] = vx;
-          f.u[i * n + j] = vx;
-          f.u[(i + 1) * n + j] = vx;
-          f.v[i * n + j] = vy;
-          f.v[i * n + j + 1] = vy;
+          fluidSimSetObstacle.u[i * n + j] = obstacleVelX;
+          fluidSimSetObstacle.u[i * n + j] = obstacleVelX;
+          fluidSimSetObstacle.u[(i + 1) * n + j] = obstacleVelX;
+          fluidSimSetObstacle.v[i * n + j] = obstacleVelY;
+          fluidSimSetObstacle.v[i * n + j + 1] = obstacleVelY;
         }
       }
     }
