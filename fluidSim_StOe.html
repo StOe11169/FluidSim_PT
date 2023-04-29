@@ -83,12 +83,13 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     //TODO Check if algorithms are focussed on rows first or collumns first
     //TODO decouple simulation speed from rendering speed
     //TODO Add dimensions to all physical units
+    //TODO Make number of cells independent of sim cell size
 
     var canvas = document.getElementById("myCanvas");                         //Opens 2D Canvas API
     var canvas2DContext = canvas.getContext("2d");
-    canvas.width = 500; //window.innerWidth - 20;          //TODO Make changeable. window.innerWidth is browser specific/current window
+    canvas.width = 600; //window.innerWidth - 20;          //TODO Make changeable. window.innerWidth is browser specific/current window
     //TODO Stays small when you start in a small window. Influences fluid speed
-    canvas.height = 250;//window.innerHeight - 100;       //TODO Make changeable
+    canvas.height = 500; //window.innerHeight - 100;       //TODO Make changeable
 
     canvas.focus();                                 // Focused element receives keyboard and similar events by default
 
@@ -141,14 +142,14 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             this.numYCells = numY + 2;							//Number of Cells in y Direction; +2 for values at the edge
             this.numCells = this.numXCells * this.numYCells;			//Total number of cells. necessary to determine size of pressure, velocity etc. fields
             this.cellSize = simulationCellSize;										//Grid Spacing
-            this.xVel = new Float32Array(this.numCells);		//Velocity Field in horizontal/X-Direction
-            this.yVel = new Float32Array(this.numCells);		//Velocity Field in vertical/Y-Directions
-            this.newXVel = new Float32Array(this.numCells);
-            this.newYVel = new Float32Array(this.numCells);
-            this.pressureField = new Float32Array(this.numCells);		//Pressure Field
-            this.cellType = new Float32Array(this.numCells);		//Marker for all cells, s=0 for walls, s=1 for normal cells
-            this.smokeField = new Float32Array(this.numCells);		//Smoke/Mist Field  1=white 0=black
-            this.newSmokeField = new Float32Array(this.numCells);
+            this.xVel = new Float64Array(this.numCells);		//Velocity Field in horizontal/X-Direction
+            this.yVel = new Float64Array(this.numCells);		//Velocity Field in vertical/Y-Directions
+            this.newXVel = new Float64Array(this.numCells);
+            this.newYVel = new Float64Array(this.numCells);
+            this.pressureField = new Float64Array(this.numCells);		//Pressure Field
+            this.cellType = new Float64Array(this.numCells);		//Marker for all cells, s=0 for walls, s=1 for normal cells
+            this.smokeField = new Float64Array(this.numCells);		//Smoke/Mist Field  1=white 0=black
+            this.newSmokeField = new Float64Array(this.numCells);
             this.smokeField.fill(1.0)								//Start with "smoke value" of 1 everywhere
             // var num = numX * numY;							//Number of cells excluding Walls, currently not used
             this.xVel.fill(0.0);
@@ -160,13 +161,13 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             //Laplacion of a function f(x,) with a step size/grid spacing of h. Note that a scalar field, like the pressure Field has no laplacian associated with it.
             //Lap_h_f(x,y)=( f(x-h, y) + f(x+h,y) + f(x,y-h) + f(x,y+h) - 4*f(x,y) )/(h*h)
             var n = this.numYCells;
-            var laplacian = (field[(i - 1) * n + j] + field[(i + 1) * n + j] + field[i * n + j - 1] + field[i * n + j + 1] - 4 * field[i * n + j]) / (this.cellSize * this.cellSize);
+            var laplacian = (field[(i - 1) * n + j] + field[(i + 1) * n + j] + field[i * n + j - 1] + field[i * n + j + 1] - 4 * field[i * n + j]) / (this.cellSize * this.cellSize); //Division leads to large numbers and overflow NaN
             return laplacian;
         }
 
         computeDivergence(horizontal, vertical, i, j) {
                 var n = this.numYCells;
-                var divergenceValue = (horizontal[(i + 1) * n + j] - horizontal[i * n + j] + vertical[i * n + j + 1] - vertical[i * n + j]) / this.cellSize;
+                var divergenceValue = (horizontal[(i + 1) * n + j] - horizontal[i * n + j] + vertical[i * n + j + 1] - vertical[i * n + j]); //Dividing by any number smaller than 1.0 leads to NaN, overflow.
                 return divergenceValue;
             }
 
@@ -174,7 +175,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
         computeViscousTerm(velocityField, viscosity, i, j) {
             let laplacian = this.computeLaplacian(velocityField, i, j);
-            var viscousTerm = viscosity * laplacian;
+            var viscousTerm = viscosity  * laplacian;
             return viscousTerm;
         }
 
@@ -193,11 +194,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                         var viscousTermY = this.computeViscousTerm(this.yVel, viscosity, i, j);
                         this.yVel[index] += dt * viscousTermY;
                     }
-                    //this.xVel[index] += this.newXVel[index];
-                    //this.yVel[index] += this.newYVel[index];
                 }
             }
-            console.log("addViscousTerm reached");
         }
 
         computePressureTerm(p, i, j, isHorizontal) {
@@ -321,17 +319,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             }
         }
 
-        velAdditionTest() {
-            var n = this.numYCells;
-            for (var i = 1; i < this.numXCells - 1; i++) {
-                for (var j = 1; j < n - 1; j++) {
-                    var index = i * n + j;
-                    this.xVel[index] += 10;
-                    this.yVel[index] += 10;
-                }
-            }
-            console.log("vel Addition Test");
-        }
+
 
 //!--------------------------------------End Of New Math Functions----------------------------
 
@@ -555,7 +543,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         performSimulationStep(dt, gravity, numIters, viscosity) {
 
             this.addGravity(dt, gravity);
-            //this.addViscousTerm(dt, viscosity);
+            this.addViscousTerm(dt, viscosity);
             //this.velAdditionTest();
             this.pressureField.fill(0.0);				//TODO: Make optional to show why its necessary.Clear pressurefield.
             this.forceIncompressibility(numIters, dt);
@@ -594,6 +582,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             showPressure: false,
             showSmoke: true,
             fluidSim: null
+
         };
 
     function setupScene(sceneNr = 0)		//Always start with sceneNr = 0 aka Default-Start
@@ -607,20 +596,21 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
         var res = 100;					//Resolution
 
-        if (sceneNr == 0)
-            res = 50;
-        else if (sceneNr == 3)          //!Lags like hell
-            res = 200;
+
         //Establish simulation space
         var domainHeight = 1.0;										    //TODO Make changeable. Simulation height in simulation space units. Independent of physical units
         var domainWidth = domainHeight / simHeight * simWidth;          //Simulation width in simulation space units. Independent of physical units
-        var setupCellSize = domainHeight / res;                                     //Grid spacing
+        var setupCellSize = 0.01; //domainHeight / res;                                     //Grid spacing
 
         var numX = Math.floor(domainWidth / setupCellSize);						    //TODO Make changeable
         var numY = Math.floor(domainHeight / setupCellSize);					    //TODO Make changeable
 
         var density = densityValue;										//TODO Make changeable
         var viscosity = 0.0000035;
+        console.log("NumX");
+        console.log(numX);
+        console.log("NumY");
+        console.log(numY);
 
 
         fluidSimSetup = scene.fluidSim = new FluidSim(density, numX, numY, setupCellSize, viscosity);		    //Scene starts without a fluid, give it one
@@ -944,7 +934,9 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     }
 
     //-----------------------end of draw function ----------------------------------------
-    function setObstacle(x, y, reset) {     //x and y = center position of the obstacle
+    function setObstacle(x, y, reset) {
+        //x and y = center position of the obstacle
+
         //! What causes a reset?
         var obstacleVelX = 0.0;                       //initial Object velocities
         var obstacleVelY = 0.0;
@@ -1076,7 +1068,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
     function updateSimulation() {
         if (!scene.paused)
-            scene.fluidSim.performSimulationStep(scene.dt, scene.gravity, scene.numIters, scene.viscosity)
+            scene.fluidSim.performSimulationStep(scene.dt, scene.gravity, scene.numIters, scene.fluidSim.viscosity)
         scene.frameNr++;
     }
 
