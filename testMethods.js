@@ -202,17 +202,17 @@ function changeCellType(obstacleType){ //Addition to setobstacle function
 function drawObstacle(obstacleID){ //TODO Obstacles should not override each other
 
     //Draws a circle
-    c.beginPath();
-    c.arc(convertSimToCanvasX(scene.obstacleX), convertSimToCanvasY(scene.obstacleY), canvasScale * radius, 0.0, 2.0 * Math.PI);
-    c.closePath();
-    c.fill()
-    c.lineWidth = 3.0; //!Unnecessary
-    c.strokeStyle = "#000000";          //! Make a black edge. cool
-    c.beginPath();
-    c.arc(convertSimToCanvasX(scene.obstacleX), convertSimToCanvasY(scene.obstacleY), canvasScale * radius, 0.0, 2.0 * Math.PI);
-    c.closePath();
-    c.stroke();
-    c.lineWidth = 1.0;  //!Unnecessary
+    canvas2DContext.beginPath();
+    canvas2DContext.arc(convertSimToCanvasX(scene.obstacleX), convertSimToCanvasY(scene.obstacleY), canvasScale * radius, 0.0, 2.0 * Math.PI);
+    canvas2DContext.closePath();
+    canvas2DContext.fill()
+    canvas2DContext.lineWidth = 3.0; //!Unnecessary
+    canvas2DContext.strokeStyle = "#000000";          //! Make a black edge. cool
+    canvas2DContext.beginPath();
+    canvas2DContext.arc(convertSimToCanvasX(scene.obstacleX), convertSimToCanvasY(scene.obstacleY), canvasScale * radius, 0.0, 2.0 * Math.PI);
+    canvas2DContext.closePath();
+    canvas2DContext.stroke();
+    canvas2DContext.lineWidth = 1.0;  //!Unnecessary
 
     //Draw a rectangle
 }

@@ -82,10 +82,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
   //TODO Add missing {} on if-statements for better readability
   //TODO Check if algorithms are focussed on rows first or collumns first
   //TODO decouple simulation speed from rendering speed
+  //TODO Add dimensions to all physical units
 
-
-  var canvas = document.getElementById("myCanvas"); ;                        //Opens 2D Canvas API
-  var c = canvas.getContext("2d");
+  var canvas = document.getElementById("myCanvas");                         //Opens 2D Canvas API
+  var canvas2DContext = canvas.getContext("2d");
   canvas.width = window.innerWidth - 20;          //TODO Make changeable. window.innerWidth is browser specific/current window
                                                   //TODO Stays small when you start in a small window. Influences fluid speed
   canvas.height = window.innerHeight - 100;       //TODO Make changeable
@@ -133,7 +133,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 
   class FluidSim {
-    constructor(density, numX, numY, simulationCellSize, viscosity = 1) {
+    constructor(density, numX, numY, simulationCellSize, viscosity) {
       this.density = density;
       this.viscosity = viscosity;
       this.numXCells = numX + 2;							//Number of Cells in x Direction; +2 for values at the edge
@@ -151,6 +151,53 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
       this.smokeField.fill(1.0)								//Start with "smoke value" of 1 everywhere
       // var num = numX * numY;							//Number of cells excluding Walls, currently not used
     }
+//!-----------------------------------------New Math Functions--------------------------------
+      computeLaplacian(field, i, j) { //Compute the lapalcian of a 2D VECTOR-FIELD! with second-order central difference method. Atm. vertical and horizontal component must be stored in separate 1D arrays
+          //Laplacion of a function f(x,) with a step size/grid spacing of h. Note that a scalar field, like the pressure Field has no laplacian associated with it.
+          //Lap_h_f(x,y)=( f(x-h, y) + f(x+h,y) + f(x,y-h) + f(x,y+h) - 4*f(x,y) )/(h*h)
+          var n = this.numYCells;
+          var laplacian = (field[(i - 1) * n + j] + field[(i + 1) * n + j] + field[i * n + j - 1] + field[i * n + j + 1] - 4 * field[i * n + j]) / (this.cellSize * this.cellSize)
+          return laplacian;
+      }
+
+      computeDivergence(horizontal, vertical, i, j) {
+          var n = this.numYCells;
+          var divergenceValue = (horizontal[(i + 1) * n + j] - horizontal[i * n + j] + vertical[i * n + j + 1] - vertical[i * n + j]) / this.cellSize;
+          return divergenceValue;
+      }
+
+      computeViscousTerm(velocityField, viscosity, i, j) {
+          let laplacian = this.computeLaplacian(velocityField, i, j);
+          var viscousTerm = viscosity * laplacian;
+          return viscousTerm;
+      }
+
+      addViscousTerm(dt) {
+          var n = this.numYCells;
+          for (var i = 1; i < this.numXCells; i++) {
+              for (var j = 1; j < n - 1; j++) {
+                  var index = i * n + j;
+
+                  if (this.cellType[i * n + j] != 0.0 && this.cellType[(i - 1) * n + j] != 0.0 && j < this.numYCells - 1) {              //check for obstacles and walls
+
+                      var viscousTermX = this.computeViscousTerm(this.xVel, this.viscosity, i, j);
+                      this.xVel[index] += dt * viscousTermX;
+                  }
+
+                  if (this.cellType[i * n + j] != 0.0 && this.cellType[(i - 1) * n + j] != 0.0 && j < this.numYCells - 1) {
+                      var viscousTermY = this.computeViscousTerm(this.yVel, this.viscosity, i, j);
+                      this.yVel[index] += dt * viscousTermY;
+                  }
+                  //this.xVel[index] += this.newXVel[index];
+                  //this.yVel[index] += this.newYVel[index];
+              }
+          }
+          console.log("addViscousTerm excecuted");
+      }
+
+//!--------------------------------------End Of New Math Functions----------------------------
+
+
 
     addGravity(dt, gravity)                              //adds gravity to v-component (vertical/Y) of all cells, updates vertical velocity
     {
@@ -165,7 +212,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 
     //? Better Version than three for-loops possible?
-    forceIncompressibility(numIters, dt) {				//Solves poisson equation and secures incompressible behaviour
+    forceIncompressibility(numIters, dt) {
+        //Solves poisson equation and secures incompressible behaviour
       //TODO: Move solving of poisson-equation to its own function. Multiple iterations through all cells
       var n = this.numYCells;
       var currentPressure = densityValue * this.cellSize / dt;			// current static pressure
@@ -366,16 +414,18 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 
     performSimulationStep(dt, gravity, numIters) {
-      //this.velocityChange.fill(0.0);                //clear velocity change array
-      //Determine all changes in velocity, then add everything else
+
       this.addGravity(dt, gravity);
-      //var div = computeDiv();
+      //this.addViscousTerm(dt);
+
       this.pressureField.fill(0.0);				//TODO: Make optional to show why its necessary.Clear pressurefield.
       this.forceIncompressibility(numIters, dt);
 
       this.applyBoundaryCondition();
       this.advectVelocity(dt);
       this.advectSmoke(dt);
+      this.newXVel.fill(0.0);
+      this.newYVel.fill(0.0);
     }
   }
 
@@ -405,8 +455,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     scene.obstacleRadius = 0.15;	//TODO Make Changeable
     scene.overRelaxation = 1.9;		//TODO Make changeable
 
-    scene.dt = 1.0 / 60.0;			//TODO Make changeable
-    scene.numIters = 40;			//TODO Make changeable
+   // scene.dt = 1.0 / 60.0;			//TODO Make changeable
+    //scene.numIters = 40;			//TODO Make changeable
 
     var res = 100;					//Resolution
 
@@ -423,10 +473,9 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     var numY = Math.floor(domainHeight / h);					    //TODO Make changeable
 
     var density = densityValue;										//TODO Make changeable
-    var viscosity = this.viscosity;
+    var viscosity = 0.5;
 
     fluidSimSetup = scene.fluidSim = new FluidSim(density, numX, numY, h, viscosity);		    //Scene starts without a fluid, give it one
-
     var n = fluidSimSetup.numYCells;
 
     //TODO Decouple from Hard Code, add more scenes. Scenes stored in Database
@@ -519,11 +568,11 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
   //! Reminder "c" ist the canvas
 
   function setColor(r, g, b) {
-    c.fillStyle = `rgb(
+    canvas2DContext.fillStyle = `rgb(
                         ${Math.floor(255 * r)},
                         ${Math.floor(255 * g)},
                         ${Math.floor(255 * b)})`
-    c.strokeStyle = `rgb(
+    canvas2DContext.strokeStyle = `rgb(
                         ${Math.floor(255 * r)},
                         ${Math.floor(255 * g)},
                         ${Math.floor(255 * b)})`
@@ -567,9 +616,9 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
   }
   //Draws the results from the fluid simulation to the canvas
   function draw() {                                               //TODO Break down into smaler functions?
-    c.clearRect(0, 0, canvas.width, canvas.height);             //Start with a blank canvas
+    canvas2DContext.clearRect(0, 0, canvas.width, canvas.height);             //Start with a blank canvas
 
-    c.fillStyle = "#FF0000";                                    //Fill red
+    canvas2DContext.fillStyle = "#FF0000";                                    //Fill red
     fluidSimDraw = scene.fluidSim;                                            //Take the fluid from the scene
     n = fluidSimDraw.numYCells;                                                 //Grid Height
     var cellScale = 1.1;                                        //TODO Make adjustable Scaling factor
@@ -583,7 +632,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
       maxP = Math.max(maxP, fluidSimDraw.pressureField[i]);
     }
 
-    imageData = c.getImageData(0, 0, canvas.width, canvas.height)
+    canvasImageData = canvas2DContext.getImageData(0, 0, canvas.width, canvas.height)
     var rgb_colorArray = [255, 255, 255, 255]                            //color array far later reference of values
 
     //Go through all cells
@@ -594,7 +643,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
           var pressure = fluidSimDraw.pressureField[i * n + j];         //Get pressure Value
           var saturation = fluidSimDraw.smokeField[i * n + j];         //Get value of smokeField, can be interpreted as saturation
-          rgb_colorArray = getSciColor(pressure, minP, maxP);
+          rgb_colorArray = this.getSciColor(pressure, minP, maxP);
           if (scene.showSmoke)                    //? Maybe as ternary operation instead of two 'if-statements'?
           {
             //adjust colours with saturation at the current point in the field
@@ -608,7 +657,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
           rgb_colorArray[1] = 255 * smokeOpacity;
           rgb_colorArray[2] = 255 * smokeOpacity;
           if (scene.sceneNr == 2) {
-            rgb_colorArray = getSciColor(smokeOpacity, 0.0, 1.0);
+            rgb_colorArray = this.getSciColor(smokeOpacity, 0.0, 1.0);
           }
 
         }
@@ -634,21 +683,21 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
           var p = 4 * (yi * canvas.width + x)  // p = starting index of the current pixel. Multiply by for since every pixel has 4 values. R,G,B and Alpha
 
           for (var xi = 0; xi < cx; xi++) {   //go through all x-values
-            imageData.data[p++] = r;               //Increment p by one after each. Start at p(red). Then add +1
-            imageData.data[p++] = g;               //Steps to the green value of the current pixel, add +1 to get to blue, and one more to get to alpha
-            imageData.data[p++] = b;
-            imageData.data[p++] = 255;
+            canvasImageData.data[p++] = r;               //Increment p by one after each. Start at p(red). Then add +1
+            canvasImageData.data[p++] = g;               //Steps to the green value of the current pixel, add +1 to get to blue, and one more to get to alpha
+            canvasImageData.data[p++] = b;
+            canvasImageData.data[p++] = 255;
           }
         }
       }
     }
 
-    c.putImageData(imageData, 0, 0); //Put all the data(pixel values) of the  object id onto the canvas. starting at point [0, 0]
+    canvas2DContext.putImageData(canvasImageData, 0, 0); //Put all the data(pixel values) of the  object id onto the canvas. starting at point [0, 0]
 
     if (scene.showVelocities) { //Shows current velocities and their direction
       //! Extremly laggy!
       //TODO dont show every velocity, similar to streamlines
-      c.strokeStyle = "#000000";
+      canvas2DContext.strokeStyle = "#000000";
       scale = 0.02;
 
       for (var i = 0; i < fluidSimDraw.numXCells; i++) {
@@ -657,24 +706,24 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
           var u = fluidSimDraw.xVel[i * n + j];
           var v = fluidSimDraw.yVel[i * n + j];
 
-          c.beginPath();
+          canvas2DContext.beginPath();
 
           x0 = simToCanvasX(i * h);
           x1 = simToCanvasX(i * h + u * scale);
           y = simToCanvasY((j + 0.5) * h);
 
-          c.moveTo(x0, y);
-          c.lineTo(x1, y);
-          c.stroke();
+          canvas2DContext.moveTo(x0, y);
+          canvas2DContext.lineTo(x1, y);
+          canvas2DContext.stroke();
 
           x = simToCanvasX((i + 0.5) * h);
           y0 = simToCanvasY(j * h);
           y1 = simToCanvasY(j * h + v * scale)
 
-          c.beginPath();
-          c.moveTo(x, y0);
-          c.lineTo(x, y1);
-          c.stroke();
+          canvas2DContext.beginPath();
+          canvas2DContext.moveTo(x, y0);
+          canvas2DContext.lineTo(x, y1);
+          canvas2DContext.stroke();
 
         }
       }
@@ -685,7 +734,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
       var segLen = fluidSimDraw.cellSize * 0.2;  //Segment length? Not used
       var numSegs = 5;         //Iteration length for drawing streamline. The biger the longer a streamline.
       //Lower means more individual streamlines.
-      c.strokeStyle = "#000000";      //Streamline color
+      canvas2DContext.strokeStyle = "#000000";      //Streamline color
 
       for (var i = 1; i < fluidSimDraw.numXCells - 1; i += 5)         //Start a streamline at every fifth cell
       {                                               //TODO Make step-size changeable / controll streamline density
@@ -694,8 +743,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
           var x = (i + 0.5) * fluidSimDraw.cellSize;
           var y = (j + 0.5) * fluidSimDraw.cellSize;
 
-          c.beginPath();                          //Clear list of sub-paths and start a new one
-          c.moveTo(simToCanvasX(x), simToCanvasY(y));                 //at position [x,y]
+          canvas2DContext.beginPath();                          //Clear list of sub-paths and start a new one
+          canvas2DContext.moveTo(simToCanvasX(x), simToCanvasY(y));                 //at position [x,y]
 
           for (var n = 0; n < numSegs; n++) {
             var u = fluidSimDraw.sampleField(x, y, xVel_FIELD);
@@ -708,9 +757,9 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             if (x > fluidSimDraw.numXCells * fluidSimDraw.cellSize) {             //Stop if out of bounce
               break;
             }
-            c.lineTo(simToCanvasX(x), simToCanvasY(y));             //take the new position as endpoint of the line
+            canvas2DContext.lineTo(simToCanvasX(x), simToCanvasY(y));             //take the new position as endpoint of the line
           }
-          c.stroke();                             //Actually draw the line on the canvas
+          canvas2DContext.stroke();                             //Actually draw the line on the canvas
         }
       }
     }
@@ -718,35 +767,35 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     if (scene.showObstacle) {               //Adjusts obstacle size depending on the grid spacing
       radius = scene.obstacleRadius + fluidSimDraw.cellSize;     //Grid spacing dependent on browser size
       if (scene.showPressure) {
-        c.fillStyle = "#000000";        //Set fill colour to black if 'show Pressure' is selected
+        canvas2DContext.fillStyle = "#000000";        //Set fill colour to black if 'show Pressure' is selected
       }
       else {
-        c.fillStyle = "#DDDDDD";        //Else make light gray
+        canvas2DContext.fillStyle = "#DDDDDD";        //Else make light gray
       }
       //Draws two half circles and combines them to a circle
-      c.beginPath();
-      c.arc(simToCanvasX(scene.obstacleX), simToCanvasY(scene.obstacleY), canvasScale * radius, 0.0, 2.0 * Math.PI);
-      c.closePath();
-      c.fill();
+      canvas2DContext.beginPath();
+      canvas2DContext.arc(simToCanvasX(scene.obstacleX), simToCanvasY(scene.obstacleY), canvasScale * radius, 0.0, 2.0 * Math.PI);
+      canvas2DContext.closePath();
+      canvas2DContext.fill();
 
 
-      c.lineWidth = 3.0; //!Unnecessary
-      c.strokeStyle = "#000000";          //! Make a black edge. cool
-      c.beginPath();
-      c.arc(simToCanvasX(scene.obstacleX), simToCanvasY(scene.obstacleY), canvasScale * radius, 0.0, 2.0 * Math.PI);
-      c.closePath();
-      c.stroke();
-      c.lineWidth = 1.0;  //!Unnecessary
+      canvas2DContext.lineWidth = 3.0; //!Unnecessary
+      canvas2DContext.strokeStyle = "#000000";          //! Make a black edge. cool
+      canvas2DContext.beginPath();
+      canvas2DContext.arc(simToCanvasX(scene.obstacleX), simToCanvasY(scene.obstacleY), canvasScale * radius, 0.0, 2.0 * Math.PI);
+      canvas2DContext.closePath();
+      canvas2DContext.stroke();
+      canvas2DContext.lineWidth = 1.0;  //!Unnecessary
     }
-    //? Two half circles better compute than one normal circle?
+
 
     //Display current min and max Pressure at the top left
     //TODO Unecessary in this way. always show pressure instead
     if (scene.showPressure) {
       var displayPressureString = "pressure: " + minP.toFixed(0) + " - " + maxP.toFixed(0) + " N/m";
-      c.fillStyle = "#000000";
-      c.font = "16px Arial";
-      c.fillText(displayPressureString, 10, 35);
+      canvas2DContext.fillStyle = "#000000";
+      canvas2DContext.font = "16px Arial";
+      canvas2DContext.fillText(displayPressureString, 10, 35);
     }
   }
 
