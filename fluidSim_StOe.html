@@ -57,6 +57,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 <button class="button" onclick="setupScene(0)">Tank</button>
 <button class="button" onclick="setupScene(2)">Paint</button>
 <input type="range" min="500" max="10000" value="1000" id="densitySlider">
+<input type="range" min="0.00000000000001" max="0.0001" value="0.0000001" id="viscositySlider">
 <input type="checkbox" id="streamButton" onclick="scene.showStreamlines = !scene.showStreamlines">Streamlines
 <input type="checkbox" id="velocityButton" onclick="scene.showVelocities = !scene.showVelocities">Velocities
 <input type="checkbox" name="field" id="pressureButton" onclick="scene.showPressure = !scene.showPressure;"> Pressure
@@ -103,12 +104,20 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
     var cnt = 0;
     var densitySlider = document.getElementById("densitySlider");
-    var densityValue;
+    var densityValue = 1000;
 
     densitySlider.oninput = function () {
         densityValue = densitySlider.value;
         console.log(densityValue - densitySlider.value);
+    }
 
+    var viscositySlider = document.getElementById("viscositySlider");
+    var viscosityValue = 0.0000001;
+
+    viscositySlider.oninput = function () {
+        viscosityValue = viscositySlider.value;
+        console.log("Diff: viscVal - viscSliderVal. Should be 0, if not rip")
+        console.log(viscosityValue - viscositySlider.value);
     }
 
 
@@ -198,7 +207,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             }
         }
 
-        computePressureTerm(p, i, j, isHorizontal) {
+        computePressureTerm(p, i, j, isHorizontal, dt) {
             //compute the influence of the pressure gradient on the velocity field by a forward finite difference method.
             // pressureDifference = p(x+h)-p(x) ) / h
             // pressureTermV(i,j) = pressureDifference(i,j) * dt / (density * cellSize);
@@ -208,14 +217,12 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             if (isHorizontal = true) {
                 //Compute horizontal pressure term
                 var pressureDifferenceX = (this.pressureField[i * n + j] - this.pressureField[(i + 1) * n + j]) / this.cellSize;
-                var pressureTermX = pressureDifferenceX * dt / (density * this.cellSize);
-                pressureTermX[index] = pressureTermX;
+                var pressureTermX = pressureDifferenceX * dt / (this.density * this.cellSize);
                 //Note: [(i + 1) * n + j] is right of [i * n + j]
             } else {
                 //Compute vertical pressure term
                 var pressureDifferenceY = (this.pressureField[i * n + j] - this.pressureField[i * n + (j + 1)]) / this.cellSize;
                 var pressureTermY = pressureDifferenceY * dt / (this.density * this.cellSize);
-                pressureTermY[index] = pressureTermY;
                 //Note: [i * n + (j + 1)] is visually "below" [i * n + j]. Note that the y-direction of the grid points downwards
             }
             return (isHorizontal ? pressureTermX : pressureTermY);
@@ -251,16 +258,15 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                     pressureField[index] = newPressure;        //Set the newPressure at the index.
                 }
             }
+            console.log("Solved Pressure field")
         }
 
         addPressureTerm(dt) {
+        var n = this.numYCells;
             for (let i = 1; i < this.numXCells; i++) {
                 for (let j = 1; j < n - 1; j++) {
-                    index = i * n + j;
-
+                    var index = i * n + j;
                     if (this.cellType[i * n + j] != 0.0 && this.cellType[(i - 1) * n + j] != 0.0 && j < this.numYCells - 1) {              //check for obstacles and walls
-
-
                         let pressureTermX = this.computePressureTerm(this.pressureField, true);
                         this.newXVel[index] += dt * pressureTermX;
                     }
@@ -275,7 +281,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             }
         }
 
-        newforceIncompressibility(numIters, dt, viscosity) {
+        newforceIncompressibility(numIters, dt, viscosity) { //! Leads to odd behaviour
             //Multiple iterations through all cells
             var n = this.numYCells;
             var densityValue = densitySlider.value;
@@ -291,7 +297,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                         if (this.cellType[index] === 0.0) {		// If there is a wall at s[i*n+j] go to the next cell
                             continue;
                         }
-
                         var cellType_x0 = this.cellType[(i - 1) * n + j];
                         var cellType_x1 = this.cellType[(i + 1) * n + j];
                         var cellType_y0 = this.cellType[i * n + j - 1];
@@ -300,8 +305,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                         if (numberFreeEdges === 0.0) {				// If alle cells are walls, go to the next cell
                             continue;
                         }
-
-
                         var relativeDivergence = -div / numberFreeEdges;					// Equal part through each adjacent cells
                         relativeDivergence *= scene.overRelaxation;
                         this.pressureField[i * n + j] += currentPressure * relativeDivergence;
@@ -544,10 +547,12 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
             this.addGravity(dt, gravity);
             this.addViscousTerm(dt, viscosity);
-            //this.velAdditionTest();
+            this.solvePressureField(this.pressureField, this.xVel, this.yVel, dt);
+            //this.addPressureTerm(dt);
             this.pressureField.fill(0.0);				//TODO: Make optional to show why its necessary.Clear pressurefield.
             this.forceIncompressibility(numIters, dt);
             //this.newforceIncompressibility(numIters, dt, viscosity);
+
 
             this.applyBoundaryCondition();
             this.advectVelocity(dt);
@@ -606,7 +611,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         var numY = Math.floor(domainHeight / setupCellSize);					    //TODO Make changeable
 
         var density = densityValue;										//TODO Make changeable
-        var viscosity = 0.0000035;
+        var viscosity = viscosityValue;
         console.log("NumX");
         console.log(numX);
         console.log("NumY");
