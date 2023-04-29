@@ -133,9 +133,9 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 
   class FluidSim {
-    constructor(density, numX, numY, simulationCellSize)
-    {
+    constructor(density, numX, numY, simulationCellSize, viscosity = 1) {
       this.density = density;
+      this.viscosity = viscosity;
       this.numXCells = numX + 2;							//Number of Cells in x Direction; +2 for values at the edge
       this.numYCells = numY + 2;							//Number of Cells in y Direction; +2 for values at the edge
       this.numCells = this.numXCells * this.numYCells;			//Total number of cells. necessary to determine size of pressure, velocity etc. fields
@@ -423,8 +423,9 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     var numY = Math.floor(domainHeight / h);					    //TODO Make changeable
 
     var density = densityValue;										//TODO Make changeable
+    var viscosity = this.viscosity;
 
-    fluidSimSetup = scene.fluidSim = new FluidSim(density, numX, numY, h);		    //Scene starts without a fluid, give it one
+    fluidSimSetup = scene.fluidSim = new FluidSim(density, numX, numY, h, viscosity);		    //Scene starts without a fluid, give it one
 
     var n = fluidSimSetup.numYCells;
 
