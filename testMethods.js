@@ -161,10 +161,10 @@ newforceIncompressibility(numIters, dt, viscosity)
                 var laplacianVAtIndex = laplacianV[index];
 
                 // Diffusion term added for viscosity
-                this.u[i * n + j] += diffusionRate * laplacianUAtIndex - sx0 * relativeDivergence;
-                this.u[(i + 1) * n + j] += diffusionRate * laplacianUAtIndex + sx1 * relativeDivergence;
-                this.v[i * n + j] += diffusionRate * laplacianVAtIndex - sy0 * relativeDivergence;
-                this.v[i * n + j + 1] += diffusionRate * laplacianVAtIndex + sy1 * relativeDivergence;
+                this.xVel[i * n + j] += diffusionRate * laplacianUAtIndex - sx0 * relativeDivergence;
+                this.xVel[(i + 1) * n + j] += diffusionRate * laplacianUAtIndex + sx1 * relativeDivergence;
+                this.yVel[i * n + j] += diffusionRate * laplacianVAtIndex - sy0 * relativeDivergence;
+                this.yVel[i * n + j + 1] += diffusionRate * laplacianVAtIndex + sy1 * relativeDivergence;
             }
         }
     }
