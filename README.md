@@ -16,6 +16,8 @@ For a more extensive library of examples, e.g. a narrowing pipe, I will probably
 The project is still not entirely finished but incorporates methods to allow for the modelling the effects of a pressure gradient, viscosity and diffusion on the flow of the fluid.
 
 It is still assumed, that the fluid is incompressible, viscosity and density are constant and that the process is isothermal.
+The Simulator uses diffrent numerical approaches to determine divergence, gradient and laplacian of the vectorfields.
+The main approach is semi-Lagrangian advection of the velocity field.
 
 Used resources: 
 
