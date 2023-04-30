@@ -167,6 +167,13 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         }
 
 //!-----------------------------------------New Math Functions--------------------------------
+        roundToDecimal(number){
+            number = number.toFixed(5);     //Rounds to 5 decimal places, but returrns number as a string
+            number = parseFloat(number);     // convert number back to a float
+            return number;
+        }
+
+
         computeLaplacian(field, i, j) {
             //Compute the laplacian of a 2D VECTOR-FIELD! with second-order central difference method. Atm. vertical and horizontal component must be stored in separate 1D arrays
             //Laplacian of a function f(x,) with a step size/grid spacing of h. Note that a scalar field, like the pressure Field has no laplacian associated with it.
@@ -322,9 +329,13 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                         this.xVel[(i + 1) * n + j] += diffusionRate * laplacianX + cellType_x1 * relativeDivergence;
                         this.yVel[i * n + j] += diffusionRate * laplacianY - cellType_y0 * relativeDivergence;
                         this.yVel[i * n + j + 1] += diffusionRate * laplacianY + cellType_y1 * relativeDivergence;
+
+                        //console.log("xVel after incompressibillity is aplied: " + this.xVel[i * n + j]);
+                        //console.log("index: " + (i * n + j));
                     }
                 }
             }
+            console.log("newforceIncompressibility done")
         }
 
 
@@ -555,9 +566,15 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             this.solvePressureField(this.pressureField, this.xVel, this.yVel, dt);
             this.addPressureTerm(dt);
             this.pressureField.fill(0.0);				//TODO: Make optional to show why its necessary.Clear pressurefield.
+            var rnd = Math.floor((Math.random()*1000));
+           // console.log("xVel_Max before incomp: " + Math.max(...this.xVel));
+            //console.log("xVel at random point before incomp: " + this.xVel[rnd]);
 
             //this.forceIncompressibility(numIters, dt);
             this.newforceIncompressibility(numIters, dt, viscosity);
+
+            //console.log("xVel_Max after incomp: " + Math.max(...this.xVel));
+            //console.log("xVel at random point after incomp: " + this.xVel[rnd]);
 
             this.applyBoundaryCondition();
             this.advectVelocity(dt);
