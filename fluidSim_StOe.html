@@ -190,6 +190,13 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 return divergenceValue; //Unit 1/m
             }
 
+            computeGradient(field, i, j) { //compute gradient of a field at the point [i,j] by the forward, finite difference method.
+            var n = this.numYCells;
+            var gradient = (field[i * n + j] - field[(i + 1) * n + j]) / this.cellSize;
+                return gradient;
+                //TODO can only handle one field, gradient of yVel and xVel calculatet with diffrent cells.
+            }
+
 
 
         computeViscousTerm(velocityField, viscosity, i, j) {
@@ -219,19 +226,16 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
         computePressureTerm(i, j, isHorizontal, dt) {
             //compute the influence of the pressure gradient on the velocity field by a forward finite difference method.
-            // pressureGradient = p(x+h)-p(x) ) / h
-            // pressureTermV(i,j) = pressureDifference(i,j) * dt / (density * cellSize);
             //Units of the gradient: Pa/m or Pa/pixel
             //Units of the pressureTerm: (Pa/m) / (kg/m^3 * m) = m/s^2
             var n = this.numYCells;
 
-            if (isHorizontal) {
-                //Compute horizontal pressure term
-                var pressureGradient = (this.pressureField[i * n + j] - this.pressureField[(i + 1) * n + j]) / this.cellSize;  //! Last error: pressureDifference NaN. Divide by cellSize to normalize pressure Gradient, so that it is independent of the cellSize. Now in units of Pa/m oder Pa/pixel
+            if (isHorizontal) { //Compute horizontal pressure term
+                // Divide by cellSize to normalize pressure Gradient, so that it is independent of the cellSize. Now in units of Pa/m oder Pa/pixel
+                var pressureGradient = (this.pressureField[i * n + j] - this.pressureField[(i + 1) * n + j]) / this.cellSize;
                 //Note: [(i + 1) * n + j] is right of [i * n + j]
             }
-            else {
-                //Compute vertical pressure term
+            else { //Compute vertical pressure term
                 var pressureGradient = (this.pressureField[i * n + j] - this.pressureField[i * n + (j + 1)]) / this.cellSize;
                 //Note: [i * n + (j + 1)] is visually "below" [i * n + j]. Note that the y-direction of the grid points downwards
             }
@@ -239,8 +243,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             return pressureTerm;
         }
 
-        addPressureTerm(dt) {
-            //Update velocity fields with the changes through the pressure gradient
+        addPressureTerm(dt) {//Update velocity fields with the changes through the pressure gradient
         var n = this.numYCells;
             for (let i = 1; i < this.numXCells; i++) {
                 for (let j = 1; j < this.numYCells ; j++) {
@@ -290,7 +293,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         }
 
         newforceIncompressibility(numIters, dt, viscosity) {
-            //! Leads to odd behaviour
             //Multiple iterations through all cells
             var n = this.numYCells;
             var densityValue = densitySlider.value;
@@ -330,12 +332,9 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                         this.yVel[i * n + j] += diffusionRate * laplacianY - cellType_y0 * relativeDivergence;
                         this.yVel[i * n + j + 1] += diffusionRate * laplacianY + cellType_y1 * relativeDivergence;
 
-                        //console.log("xVel after incompressibillity is aplied: " + this.xVel[i * n + j]);
-                        //console.log("index: " + (i * n + j));
                     }
                 }
             }
-            console.log("newforceIncompressibility done")
         }
 
 
@@ -565,16 +564,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             this.addGravity(dt, gravity);
             this.solvePressureField(this.pressureField, this.xVel, this.yVel, dt);
             this.addPressureTerm(dt);
-            this.pressureField.fill(0.0);				//TODO: Make optional to show why its necessary.Clear pressurefield.
-            var rnd = Math.floor((Math.random()*1000));
-           // console.log("xVel_Max before incomp: " + Math.max(...this.xVel));
-            //console.log("xVel at random point before incomp: " + this.xVel[rnd]);
+            this.pressureField.fill(0.0);				//TODO: Make optional to show why its necessary. Clear pressureField.
 
-            //this.forceIncompressibility(numIters, dt);
-            this.newforceIncompressibility(numIters, dt, viscosity);
-
-            //console.log("xVel_Max after incomp: " + Math.max(...this.xVel));
-            //console.log("xVel at random point after incomp: " + this.xVel[rnd]);
+            this.forceIncompressibility(numIters, dt);
+            //this.newforceIncompressibility(numIters, dt, viscosity);  //Remove comments two switch between function implementations. newforceIncompressibility() currently not working correctly.
 
             this.applyBoundaryCondition();
             this.advectVelocity(dt);
@@ -685,7 +678,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                 fluidSimSetup.smokeField[j] = 0.0;
             }
 
-            setObstacle(0.4, 0.5, true)                 //Sets initial obstacle position and visible
+            setObstacleCircle(0.4, 0.5, true)                 //Sets initial obstacle position and visible
 
             scene.gravity = 0.0;
             scene.showPressure = false;
@@ -954,7 +947,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     }
 
     //-----------------------end of draw function ----------------------------------------
-    function setObstacle(x, y, reset) {
+    function setObstacleCircle(x, y, reset) {
         //x and y = center position of the obstacle
 
         //! What causes a reset?
@@ -1016,7 +1009,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         x = mx / canvasScale;                                //
         y = (canvas.height - my) / canvasScale;
 
-        setObstacle(x, y, true);                        //set obstacle to updated position
+        setObstacleCircle(x, y, true);                        //set obstacle to updated position
     }
 
     function drag(x, y) {
@@ -1026,7 +1019,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             let my = y - bounds.top - canvas.clientTop;
             x = mx / canvasScale;
             y = (canvas.height - my) / canvasScale;
-            setObstacle(x, y, false);
+            setObstacleCircle(x, y, false);
         }
     }
 
