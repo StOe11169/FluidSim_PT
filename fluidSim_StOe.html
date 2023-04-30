@@ -164,13 +164,12 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             this.newSmokeField = new Float64Array(this.numCells);
             this.smokeField.fill(1.0)								//Start with "smoke value" of 1 everywhere
             // var num = numX * numY;							//Number of cells excluding Walls, currently not used
-            //this.xVel.fill(0.0); works without filling the fields.
-            //this.yVel.fill(0.0);
         }
 
 //!-----------------------------------------New Math Functions--------------------------------
-        computeLaplacian(field, i, j) { //Compute the lapalcian of a 2D VECTOR-FIELD! with second-order central difference method. Atm. vertical and horizontal component must be stored in separate 1D arrays
-            //Laplacion of a function f(x,) with a step size/grid spacing of h. Note that a scalar field, like the pressure Field has no laplacian associated with it.
+        computeLaplacian(field, i, j) {
+            //Compute the laplacian of a 2D VECTOR-FIELD! with second-order central difference method. Atm. vertical and horizontal component must be stored in separate 1D arrays
+            //Laplacian of a function f(x,) with a step size/grid spacing of h. Note that a scalar field, like the pressure Field has no laplacian associated with it.
             //Lap_h_f(x,y)=( f(x-h, y) + f(x+h,y) + f(x,y-h) + f(x,y+h) - 4*f(x,y) )/(h*h)
             var n = this.numYCells;
             var laplacian = (field[(i - 1) * n + j] + field[(i + 1) * n + j] + field[i * n + j - 1] + field[i * n + j + 1] - 4 * field[i * n + j]) / (this.cellSize * this.cellSize);
@@ -178,20 +177,23 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         }
 
         computeDivergence(horizontal, vertical, i, j) {
+            //Computes the divergence of a vectorfield
                 var n = this.numYCells;
-                var divergenceValue = (horizontal[(i + 1) * n + j] - horizontal[i * n + j] + vertical[i * n + j + 1] - vertical[i * n + j]); //Dividing by any number smaller than 1.0 leads to NaN, overflow.
+                var divergenceValue = (horizontal[(i + 1) * n + j] - horizontal[i * n + j] + vertical[i * n + j + 1] - vertical[i * n + j]); //Dividing by any number smaller than 1.0 leads to NaN, overflow. Normalising is therefore ommited here and handeld later.
                 return divergenceValue; //Unit 1/m
             }
 
 
 
         computeViscousTerm(velocityField, viscosity, i, j) {
+            //Compute the effect of the fluids viscosity on the change of its velocity.
             let laplacian = this.computeLaplacian(velocityField, i, j);     //Unit laplacian : (m/s)/m^2 = 1/s
             var viscousTerm = viscosity  * laplacian;                       //Unit kinematic viscosity: m^2/s
             return viscousTerm;                                             //Unit viscousTerm: m^2/s^2
         }
 
         addViscousTerm(dt, viscosity) {
+            //Update velocity fields with the changes through viscosity
             var n = this.numYCells;
             for (var i = 1; i < this.numXCells - 1; i++) {
                 for (var j = 1; j < this.numYCells - 1; j++) {
@@ -231,6 +233,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         }
 
         addPressureTerm(dt) {
+            //Update velocity fields with the changes through the pressure gradient
         var n = this.numYCells;
             for (let i = 1; i < this.numXCells; i++) {
                 for (let j = 1; j < this.numYCells ; j++) {
@@ -251,8 +254,9 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         solvePressureField(pressureField, xVel, yVel, dt) {
             //TODO add static pressure
             var n = this.numYCells;
-            var diffusionCoefficient = -dt / (this.density * this.cellSize * this.cellSize);  // rate of change of pressure due to the diffusion of the fluid. Unit m*s/kg.??
+            var diffusionCoefficient = -dt / (this.density * this.cellSize * this.cellSize);  // Measures how 'easily' a fluid diffuses rate of change of pressure due to the diffusion of the fluid. Related to but different from the diffusionRate.
             var beta = 4.0;                                                  // Coefficient to more heavily weigh the adjacentPressureSum, for stability and convergence reasons.
+            var staticPressure = densityValue * this.cellSize / dt;
 
             for (var i = 1; i < this.numXCells - 1; i++) {
                 for (var j = 1; j < this.numYCells - 1; j++) {
@@ -272,7 +276,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                     var scaledDivergence = diffusionCoefficient * div; //Determines influence of the divergence on the pressure field (right hand sight of the poisson equation)
                     var adjacentPressureSum = pressureField[(i - 1) * n + j] + pressureField[(i + 1) * n + j] + pressureField[i * n + (j - 1)] + pressureField[i * n + (j + 1)]; //Sum up all surrounding pressure values
 
-                    var newPressure = (scaledDivergence + beta * adjacentPressureSum) / (beta * numberFreeEdges);
+                    var newPressure = ((scaledDivergence + beta * adjacentPressureSum) / (beta * numberFreeEdges)) + staticPressure;
                     pressureField[index] = newPressure;        //Set the newPressure at the index.
                 }
             }
@@ -283,18 +287,19 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             //Multiple iterations through all cells
             var n = this.numYCells;
             var densityValue = densitySlider.value;
-            var currentPressure = densityValue * this.cellSize / dt;           //current static pressure
-            var diffusionRate = viscosity * dt / (this.cellSize * this.cellSize);
+            var staticPressure = densityValue * this.cellSize / dt;           //current static pressure
+            var diffusionRate = viscosity * dt / (this.cellSize * this.cellSize);       //Rate or 'speed' at which the fluid diffuses. Related to but different from the diffusionCoefficient.
 
             for (var iter = 0; iter < numIters; iter++) {    //Multiple iterations
-                for (var i = 1; i < this.numX - 1; i++) {		// Go through all Cells
-                    for (var j = 1; j < this.numY - 1; j++) {
+                for (var i = 1; i < this.numXCells - 1; i++) {		// Go through all Cells
+                    for (var j = 1; j < this.numYCells - 1; j++) {
                         var index = i * n + j;
                         //TODO is there a way to convert index to [(i - 1) * n + j] , [(i + 1) * n + j] and keep it readable? Research.
-                        var div = this.computeDivergence(this.xVel, this.yVel, i, j);
+
                         if (this.cellType[index] === 0.0) {		// If there is a wall at s[i*n+j] go to the next cell
                             continue;
                         }
+
                         var cellType_x0 = this.cellType[(i - 1) * n + j];
                         var cellType_x1 = this.cellType[(i + 1) * n + j];
                         var cellType_y0 = this.cellType[i * n + j - 1];
@@ -303,12 +308,14 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                         if (numberFreeEdges === 0.0) {				// If alle cells are walls, go to the next cell
                             continue;
                         }
+                        var div = this.computeDivergence(this.xVel, this.yVel, i, j);
                         var relativeDivergence = -div / numberFreeEdges;					// Equal part through each adjacent cells
-                        relativeDivergence *= scene.overRelaxation;
-                        this.pressureField[i * n + j] += currentPressure * relativeDivergence;
+                        relativeDivergence *= scene.overRelaxation;             // Scale up by overRelaxationFactor for faster convergence
+                        this.pressureField[i * n + j] += staticPressure * relativeDivergence;
 
                         var laplacianX = this.computeLaplacian(this.xVel, i, j);
                         var laplacianY = this.computeLaplacian(this.yVel, i, j);
+
 
                         // Diffusion term added for viscosity
                         this.xVel[i * n + j] += diffusionRate * laplacianX - cellType_x0 * relativeDivergence;
@@ -372,7 +379,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
                         var relativeDivergence = -div / numberFreeEdges;					// Equal part through each adjacent cells
                         relativeDivergence *= scene.overRelaxation;                             // Scale up by overRelaxationFactor for faster convergence
-                        this.pressureField[i * n + j] += currentPressure * relativeDivergence;  //! Ommits viscosity
+                        this.pressureField[i * n + j] += currentPressure * relativeDivergence;
 
                         this.xVel[i * n + j] -= cellType_x0 * relativeDivergence;			//Adjust all velocities so that an equal amount of fluid is pushed out of each cell.
                         this.xVel[(i + 1) * n + j] += cellType_x1 * relativeDivergence;	//Divergence then becomes Zero. Necessary for incomressible fluids
@@ -543,46 +550,15 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
         performSimulationStep(dt, gravity, numIters, viscosity) {
 
-
             this.addViscousTerm(dt, viscosity);
             this.addGravity(dt, gravity);
-
-
             this.solvePressureField(this.pressureField, this.xVel, this.yVel, dt);
-            console.log("-----------------------------Before add pressure-----------------------------");
-            console.log("Density: " + this.density);
-            console.log("CellSize: " + this.cellSize);
-            console.log("Max X-Vel: " + Math.max(...this.xVel));
-            console.log("Max Y-Vel: " + Math.max(...this.yVel));
-            console.log("maxPressure:" + Math.max(...this.pressureField));
-            var n = this.numCells
-            var randompoint = Math.floor((Math.random()*10000));
-            console.log("Randompoint: " + randompoint);
-            console.log("pressure at random point:" + scene.fluidSim.pressureField[randompoint]);
-            console.log("scene.dt: " + scene.dt);
-            console.log("density: " + scene.fluidSim.density);
-            console.log("viscosity: " + scene.fluidSim.viscosity);
-            console.log("Cellsize: " + scene.fluidSim.cellSize);
-
             this.addPressureTerm(dt);
-
-            console.log("-----------------------------After add pressure-----------------------------");
-            console.log("Density: " + this.density);
-            console.log("CellSize: " + this.cellSize);
-            console.log("Max X-Vel: " + Math.max(...this.xVel));
-            console.log("Max Y-Vel: " + Math.max(...this.yVel));
-            console.log("maxPressure:" + Math.max(...this.pressureField));
-            console.log("Randompoint: " + randompoint);
-            console.log("pressure at random point:" + scene.fluidSim.pressureField[randompoint]);
-            console.log("scene.dt: " + scene.dt);
-            console.log("density: " + scene.fluidSim.density);
-            console.log("viscosity: " + scene.fluidSim.viscosity);
-            console.log("Cellsize: " + scene.fluidSim.cellSize);
-
-
             this.pressureField.fill(0.0);				//TODO: Make optional to show why its necessary.Clear pressurefield.
-            this.forceIncompressibility(numIters, dt);
-            //this.newforceIncompressibility(numIters, dt, viscosity);
+
+            //this.forceIncompressibility(numIters, dt);
+            this.newforceIncompressibility(numIters, dt, viscosity);
+
             this.applyBoundaryCondition();
             this.advectVelocity(dt);
             this.advectSmoke(dt);
@@ -628,13 +604,13 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         //Establish simulation space
         var domainHeight = 1.0;										    //TODO Make changeable. Simulation height in simulation space units. Independent of physical units
         var domainWidth = domainHeight / simHeight * simWidth;          //Simulation width in simulation space units. Independent of physical units
-        var setupCellSize = 0.01; //domainHeight / res;                                     //Grid spacing
+        var setupCellSize = domainHeight / res;                                     //Grid spacing
 
         var numX = Math.floor(domainWidth / setupCellSize);						    //TODO Make changeable
         var numY = Math.floor(domainHeight / setupCellSize);					    //TODO Make changeable
 
-        var density = 1000.0; //densityValue;										//TODO Make changeable
-        var viscosity = 0.000001; //viscosityValue;
+        var density = densityValue;										//TODO Make changeable
+        var viscosity = viscosityValue;
 
 
 
@@ -722,18 +698,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         document.getElementById("pressureButton").checked = scene.showPressure;
         document.getElementById("smokeButton").checked = scene.showSmoke;
         document.getElementById("overrelaxButton").checked = scene.overRelaxation > 1.0;
-
-        console.log("-----------------------------After Setup-----------------------------");
-        console.log("pressure at [0]: " + scene.fluidSim.pressureField[0]);
-        var randompoint = Math.floor((Math.random()*10000));
-        console.log("Randompoint: " + randompoint);
-        console.log("pressure at random point: " + scene.fluidSim.pressureField[randompoint]);
-        console.log("scene.dt: " + scene.dt);
-        console.log("density: " + scene.fluidSim.density);
-        console.log("viscosity: " + scene.fluidSim.viscosity);
-        console.log("Cellsize: " + scene.fluidSim.cellSize);
-
-
     }
 
 
