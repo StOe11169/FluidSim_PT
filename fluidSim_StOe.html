@@ -1,0 +1,68 @@
+<!--
+Copyright 2022 Matthias Müller - Ten Minute Physics,
+www.youtube.com/c/TenMinutePhysics
+www.matthiasMueller.info/tenMinutePhysics
+
+MIT License
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+-->
+
+<!DOCTYPE html>
+<html lang="en">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+
+<head>
+    <title>Euler Fluid</title>
+   <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+<button class="button" onclick="setupScene(1)">Wind Tunnel</button>
+<button class="button" onclick="setupScene(3)">Hires Tunnel</button>
+<button class="button" onclick="setupScene(0)">Tank</button>
+<button class="button" onclick="setupScene(2)">Paint</button>
+<input id="densitySlider" max="10000" min="500" type="range" value="1000">
+<input id="viscositySlider" max="0.0001" min="0.00000000000001" type="range" value="0.0000001">
+<input id="streamButton" onclick="scene.showStreamlines = !scene.showStreamlines" type="checkbox">Streamlines
+<input id="velocityButton" onclick="scene.showVelocities = !scene.showVelocities" type="checkbox">Velocities
+<input id="pressureButton" name="field" onclick="scene.showPressure = !scene.showPressure;" type="checkbox"> Pressure
+<input checked id="smokeButton" name="field" onclick="scene.showSmoke = !scene.showSmoke;" type="checkbox">Smoke
+<input checked id="overrelaxButton" onclick="scene.overRelaxation = scene.overRelaxation === 1.0 ? 1.9 : 1.0"
+       type="checkbox">Overrelax
+
+<br>
+<canvas id="myCanvas" style="border:2px solid"></canvas>
+<script src="FluidSim.js"> </script>
+<script src="visualisation.js"></script>
+<script>
+    //TODO General
+    //TODO Sliding obstacle over source "blocks" it, moving obstacle into source does not.
+    //TODO Sliding obstacle over source "blocks" it, moving obstacle into source does not.
+    //TODO Change all finite difference methods to central difference method
+    //TODO Maybe make difference methods modular
+    //TODO Add conditions for boundaries and obstacles to math-solver functions
+    //TODO Decouple render speed from canvas size
+    //TODO Separate Code into more manageable packages
+    //TODO Add method to control and compare different numerical methods
+    //TODO Let canvas size vary but sim size stays same, only visually stretched
+    //TODO 3D with WebGl
+    //TODO Add missing {} on if-statements for better readability
+    //TODO Check if algorithms are focussed on rows first or collumns first
+    //TODO decouple simulation speed from rendering speed
+    //TODO Add dimensions to all physical units
+    //TODO Make number of cells independent of sim cell size
+    //TODO If dynamic viscosity and kinematic viscosity have not been falsly used.
+    //! dynamic visocsity = kinematic viscosity * density. my = ny * rho
+
+    setupScene(1);
+    runSimulationLoop();
+
+</script>
+</body>
+</html>
