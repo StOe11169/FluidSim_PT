@@ -85,6 +85,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     //TODO decouple simulation speed from rendering speed
     //TODO Add dimensions to all physical units
     //TODO Make number of cells independent of sim cell size
+    //TODO If dynamic viscosity and kinematic viscosity have not been falsly used.
+    //! dynamic visocsity = kinematic viscosity * density. my = ny * rho
 
     var canvas = document.getElementById("myCanvas");                         //Opens 2D Canvas API
     var canvas2DContext = canvas.getContext("2d");
@@ -151,8 +153,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             this.numYCells = numY + 2;							//Number of Cells in y Direction; +2 for values at the edge
             this.numCells = this.numXCells * this.numYCells;			//Total number of cells. necessary to determine size of pressure, velocity etc. fields
             this.cellSize = simulationCellSize;										//Grid Spacing
-            this.xVel = new Float64Array(this.numCells);		//Velocity Field in horizontal/X-Direction
-            this.yVel = new Float64Array(this.numCells);		//Velocity Field in vertical/Y-Directions
+            this.xVel = new Float64Array(this.numCells);		//Velocity Field in horizontal/X-Direction. Unit: m/s
+            this.yVel = new Float64Array(this.numCells);		//Velocity Field in vertical/Y-Directions. Unit: m/s
             this.newXVel = new Float64Array(this.numCells);
             this.newYVel = new Float64Array(this.numCells);
             this.pressureField = new Float64Array(this.numCells);		//Pressure Field
@@ -170,22 +172,22 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             //Laplacion of a function f(x,) with a step size/grid spacing of h. Note that a scalar field, like the pressure Field has no laplacian associated with it.
             //Lap_h_f(x,y)=( f(x-h, y) + f(x+h,y) + f(x,y-h) + f(x,y+h) - 4*f(x,y) )/(h*h)
             var n = this.numYCells;
-            var laplacian = (field[(i - 1) * n + j] + field[(i + 1) * n + j] + field[i * n + j - 1] + field[i * n + j + 1] - 4 * field[i * n + j]) / (this.cellSize * this.cellSize); //Division leads to large numbers and overflow NaN
+            var laplacian = (field[(i - 1) * n + j] + field[(i + 1) * n + j] + field[i * n + j - 1] + field[i * n + j + 1] - 4 * field[i * n + j]) / (this.cellSize * this.cellSize);
             return laplacian;
         }
 
         computeDivergence(horizontal, vertical, i, j) {
                 var n = this.numYCells;
                 var divergenceValue = (horizontal[(i + 1) * n + j] - horizontal[i * n + j] + vertical[i * n + j + 1] - vertical[i * n + j]); //Dividing by any number smaller than 1.0 leads to NaN, overflow.
-                return divergenceValue;
+                return divergenceValue; //Unit 1/m
             }
 
 
 
         computeViscousTerm(velocityField, viscosity, i, j) {
-            let laplacian = this.computeLaplacian(velocityField, i, j);
-            var viscousTerm = viscosity  * laplacian;
-            return viscousTerm;
+            let laplacian = this.computeLaplacian(velocityField, i, j);     //Unit laplacian : (m/s)/m^2 = 1/s
+            var viscousTerm = viscosity  * laplacian;                       //Unit kinematic viscosity: m^2/s
+            return viscousTerm;                                             //Unit viscousTerm: m^2/s^2
         }
 
         addViscousTerm(dt, viscosity) {
@@ -196,10 +198,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
                     if (this.cellType[i * n + j] != 0.0 && this.cellType[(i - 1) * n + j] != 0.0 && j < this.numYCells - 1) {              //check for obstacles and walls
                         var viscousTermX = this.computeViscousTerm(this.xVel, viscosity, i, j);
-                        this.xVel[index] += dt * viscousTermX;
-                    }
+                        this.xVel[index] += dt * viscousTermX;                                                                              // dt * viscousTerm converts to velocity
 
-                    if (this.cellType[i * n + j] != 0.0 && this.cellType[(i - 1) * n + j] != 0.0 && j < this.numYCells - 1) {
                         var viscousTermY = this.computeViscousTerm(this.yVel, viscosity, i, j);
                         this.yVel[index] += dt * viscousTermY;
                     }
@@ -209,28 +209,23 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
         computePressureTerm(i, j, isHorizontal, dt) {
             //compute the influence of the pressure gradient on the velocity field by a forward finite difference method.
-            // pressureDifference = p(x+h)-p(x) ) / h
+            // pressureGradient = p(x+h)-p(x) ) / h
             // pressureTermV(i,j) = pressureDifference(i,j) * dt / (density * cellSize);
+            //Units of the gradient: Pa/m or Pa/pixel
+            //Units of the pressureTerm: (Pa/m) / (kg/m^3 * m) = m/s^2
             var n = this.numYCells;
 
             if (isHorizontal) {
                 //Compute horizontal pressure term
-                //console.log("pressureField[" + ( i * n +j ) + "] = " + this.pressureField[i*n+j]);
-                //console.log("pressureField[" + ((i + 1) * n + j) + "] = " + this.pressureField[i*n+j])
-                //console.log("Reached computePressureTerm X");
-                //console.log("pressureGradientX: " + pressureGradientX);
-                var pressureGradientX = (this.pressureField[i * n + j] - this.pressureField[(i + 1) * n + j]) / this.cellSize;  //! Last error: pressureDifference NaN. Divide by cellSize to normalize pressure Gradient, so that it is independent of the cellSize.
-
-                var pressureTermX = pressureGradientX * dt / (this.density * this.cellSize);
-                //console.log("pressureTermX: " + pressureTermX);
+                var pressureGradient = (this.pressureField[i * n + j] - this.pressureField[(i + 1) * n + j]) / this.cellSize;  //! Last error: pressureDifference NaN. Divide by cellSize to normalize pressure Gradient, so that it is independent of the cellSize. Now in units of Pa/m oder Pa/pixel
                 //Note: [(i + 1) * n + j] is right of [i * n + j]
-            } else {
+            }
+            else {
                 //Compute vertical pressure term
-                var pressureGradient = (this.pressureField[i * n + j] - this.pressureField[i * n + (j + 1)]);
-                var pressureTerm = pressureGradient * dt /  (this.density * this.cellSize);
-
+                var pressureGradient = (this.pressureField[i * n + j] - this.pressureField[i * n + (j + 1)]) / this.cellSize;
                 //Note: [i * n + (j + 1)] is visually "below" [i * n + j]. Note that the y-direction of the grid points downwards
             }
+            var pressureTerm = pressureGradient * dt /  (this.density * this.cellSize);     //convert to acceleration
             return pressureTerm;
         }
 
@@ -241,7 +236,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                     var index = i * n + j;
                     if (this.cellType[i * n + j] != 0.0 && this.cellType[(i - 1) * n + j] != 0.0 && j < this.numYCells - 1) {              //check for obstacles and walls
                         let pressureTermX = this.computePressureTerm(i, j, true);
-                        this.newXVel[index] = dt * pressureTermX;
+                        this.newXVel[index] = dt * pressureTermX;                                                                          // *dt to convert to velocity
+
                         let pressureTermY = this.computePressureTerm(i, j, false);
                         this.newYVel[index] = dt * pressureTermY;
                     }
@@ -254,25 +250,25 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         solvePressureField(pressureField, xVel, yVel, dt) {
             //TODO add static pressure
             var n = this.numYCells;
-            var alpha = -dt / (this.density * this.cellSize * this.cellSize);  // rate of change of pressure over time due to the diffusion of the fluid
-            var beta = 4.0;                                                  // Coefficient to increase more heavily weigh the adjacentPressureSum, for stability and convergence reasons.
+            var diffusionCoefficient = -dt / (this.density * this.cellSize * this.cellSize);  // rate of change of pressure due to the diffusion of the fluid. Unit m*s/kg.??
+            var beta = 4.0;                                                  // Coefficient to more heavily weigh the adjacentPressureSum, for stability and convergence reasons.
 
             for (var i = 1; i < this.numXCells - 1; i++) {
                 for (var j = 1; j < this.numYCells - 1; j++) {
                     var index = i * n + j;
-                    var div = this.computeDivergence(xVel, yVel, i, j);                         //Calls the value of the divergence array at the index from the computeDivergence function
+                    var div = this.computeDivergence(xVel, yVel, i, j);
 
                     var cellType_x0 = this.cellType[(i - 1) * n + j];
                     var cellType_x1 = this.cellType[(i + 1) * n + j];
                     var cellType_y0 = this.cellType[i * n + j - 1];
                     var cellType_y1 = this.cellType[i * n + j + 1];
-                    var numberFreeEdges = cellType_x0 + cellType_x1 + cellType_y0 + cellType_y1;		                            // sum up all values of s. This equals the Number of edges that are NOT walls.
+                    var numberFreeEdges = cellType_x0 + cellType_x1 + cellType_y0 + cellType_y1;		                            // sum up all values of cellType. This equals the Number of edges that are NOT walls.
                     if (numberFreeEdges == 0.0 || this.cellType[index] == 0.0)						// If the cell itself or all surrounding cells ar walls
                     {
                         continue;
                     }
 
-                    var scaledDivergence = alpha * div; //Determines influence of the divergence on the pressure field (right hand sight of the poisson equation)
+                    var scaledDivergence = diffusionCoefficient * div; //Determines influence of the divergence on the pressure field (right hand sight of the poisson equation)
                     var adjacentPressureSum = pressureField[(i - 1) * n + j] + pressureField[(i + 1) * n + j] + pressureField[i * n + (j - 1)] + pressureField[i * n + (j + 1)]; //Sum up all surrounding pressure values
 
                     var newPressure = (scaledDivergence + beta * adjacentPressureSum) / (beta * numberFreeEdges);
@@ -559,7 +555,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             console.log("Max Y-Vel: " + Math.max(...this.yVel));
             console.log("maxPressure:" + Math.max(...this.pressureField));
 
-            var randompoint = Math.floor(500 * Math.random());
+            var randompoint = Math.floor((Math.random()*this.numCells)-1);
             console.log("Randompoint: " + randompoint);
             console.log("pressure at random point:" + scene.fluidSim.pressureField[randompoint]);
             console.log("scene.dt: " + scene.dt);
@@ -728,7 +724,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
         console.log("-----------------------------After Setup-----------------------------");
         console.log("pressure at [0]: " + scene.fluidSim.pressureField[0]);
-        var randompoint = Math.floor(500 * Math.random());
+        var randompoint = Math.floor((Math.random()*this.numCells)-1);
         console.log("Randompoint: " + randompoint);
         console.log("pressure at random point: " + scene.fluidSim.pressureField[randompoint]);
         console.log("scene.dt: " + scene.dt);
