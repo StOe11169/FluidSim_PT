@@ -321,7 +321,7 @@ function draw() {                                               //TODO Break dow
                 var xVel = fluidSimDraw.xVel[i * n + j];           //Get current velocities at point [i,j]
                 var yVel = fluidSimDraw.yVel[i * n + j];
 
-                //Draw y-velocities
+                //Draw x-velocities
                 canvas2DContext.beginPath();
                 x0 = simToCanvasX(i * cellSizeDraw);
                 x1 = simToCanvasX(i * cellSizeDraw + xVel * scale);
@@ -330,14 +330,49 @@ function draw() {                                               //TODO Break dow
                 canvas2DContext.lineTo(x1, y);
                 canvas2DContext.stroke();
 
-                //Draw x-velocities
-                x = simToCanvasX((i + 0.5) * cellSizeDraw);
+                //Draw arrowhead at the end of the x-velocity line
+                var arrowSize = 5;
+                var angleX = Math.atan2(0, x1 - x0); // Calculate the angle of the line
+                canvas2DContext.beginPath();
+                canvas2DContext.moveTo(x1, y);
+                canvas2DContext.lineTo(
+                    x1 - arrowSize * Math.cos(angleX - Math.PI / 6),
+                    y - arrowSize * Math.sin(angleX - Math.PI / 6)
+                );
+                canvas2DContext.moveTo(x1, y);
+                canvas2DContext.lineTo(
+                    x1 - arrowSize * Math.cos(angleX + Math.PI / 6),
+                    y - arrowSize * Math.sin(angleX + Math.PI / 6)
+                );
+                canvas2DContext.strokeStyle = "#FF0000";
+                canvas2DContext.stroke();
+                canvas2DContext.closePath();
+
+
+                //Draw y-velocities
                 y0 = simToCanvasY(j * cellSizeDraw);
                 y1 = simToCanvasY(j * cellSizeDraw + yVel * scale);
+                x = simToCanvasX((i + 0.5) * cellSizeDraw);
                 canvas2DContext.beginPath();
                 canvas2DContext.moveTo(x, y0);
                 canvas2DContext.lineTo(x, y1);
+                canvas2DContext.strokeStyle = "#0000FF";
                 canvas2DContext.stroke();
+
+                // add arrowhead to the end of the line
+                const angleY = Math.atan2(y1 - y0, 0);
+                canvas2DContext.lineTo(
+                    x - arrowSize * Math.cos(angleY - Math.PI / 6),
+                    y1 - arrowSize * Math.sin(angleY - Math.PI / 6)
+                );
+                canvas2DContext.moveTo(x, y1);
+                canvas2DContext.lineTo(
+                    x - arrowSize * Math.cos(angleY + Math.PI / 6),
+                    y1 - arrowSize * Math.sin(angleY + Math.PI / 6)
+                );
+
+                canvas2DContext.stroke();
+
 
             }
         }
