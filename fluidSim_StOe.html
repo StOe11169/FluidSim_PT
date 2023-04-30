@@ -18,7 +18,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 <head>
     <title>Euler Fluid</title>
-   <link rel="stylesheet" href="style.css">
+    <link href="style.css" rel="stylesheet">
 </head>
 
 <body>
@@ -38,26 +38,22 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 <br>
 <canvas id="myCanvas" style="border:2px solid"></canvas>
-<script src="FluidSim.js"> </script>
+<script src="FluidSim.js"></script>
 <script src="visualisation.js"></script>
 <script>
-    //TODO General
-    //TODO Sliding obstacle over source "blocks" it, moving obstacle into source does not.
+
     //TODO Sliding obstacle over source "blocks" it, moving obstacle into source does not.
     //TODO Change all finite difference methods to central difference method
     //TODO Maybe make difference methods modular
-    //TODO Add conditions for boundaries and obstacles to math-solver functions
     //TODO Decouple render speed from canvas size
-    //TODO Separate Code into more manageable packages
     //TODO Add method to control and compare different numerical methods
     //TODO Let canvas size vary but sim size stays same, only visually stretched
-    //TODO 3D with WebGl
-    //TODO Add missing {} on if-statements for better readability
-    //TODO Check if algorithms are focussed on rows first or collumns first
+    //TODO 3D with WebGl or p5.js
+    //TODO Update and expand GUI
     //TODO decouple simulation speed from rendering speed
     //TODO Add dimensions to all physical units
     //TODO Make number of cells independent of sim cell size
-    //TODO If dynamic viscosity and kinematic viscosity have not been falsly used.
+    //TODO Check if dynamic viscosity and kinematic viscosity have not been falsly used.
     //! dynamic visocsity = kinematic viscosity * density. my = ny * rho
 
     setupScene(1);

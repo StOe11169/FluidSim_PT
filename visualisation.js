@@ -1,8 +1,8 @@
 var canvas = document.getElementById("myCanvas");                         //Opens 2D Canvas API
 var canvas2DContext = canvas.getContext("2d");
-canvas.width = 600; //window.innerWidth - 20;          //TODO Make changeable. window.innerWidth is browser specific/current window
-//TODO Stays small when you start in a small window. Influences fluid speed
-canvas.height = 500; //window.innerHeight - 100;       //TODO Make changeable
+canvas.width = window.innerWidth - 20;          //TODO Make changeable
+canvas.height = window.innerHeight - 100;      //TODO Make changeable
+//TODO Stays small when you start in a small window. Influences fluid speed. window.innerWidth is browser specific/current window
 
 canvas.focus();                                 // Focused element receives keyboard and similar events by default
 
@@ -42,10 +42,6 @@ function simToCanvasY(y) {		//converts simulation coordinates into canvas coordi
 }
 
 
-
-
-
-
 var scene =			                            //TODO Make this into diffrent functions/options, first 1 example then in database
     {
         gravity: -9.81,			                //TODO Make Changeable and part of FluidSim
@@ -73,31 +69,25 @@ function setupScene(sceneNr = 0)		//Always start with sceneNr = 0 aka Default-St
     scene.obstacleRadius = 0.15;	//TODO Make Changeable
     scene.overRelaxation = 1.9;		//TODO Make changeable
 
-    // scene.dt = 1.0 / 60.0;			//TODO Make changeable
-    //scene.numIters = 40;			//TODO Make changeable
 
     var res = 100;					//Resolution
 
-
     //Establish simulation space
     var domainHeight = 1.0;										    //TODO Make changeable. Simulation height in simulation space units. Independent of physical units
-    var domainWidth = domainHeight / simHeight * simWidth;          //Simulation width in simulation space units. Independent of physical units
-    var setupCellSize = domainHeight / res;                                     //Grid spacing
+    var domainWidth = domainHeight / simHeight * simWidth;              //Simulation width in simulation space units. Independent of physical units
+    var setupCellSize = domainHeight / res;
 
     var numX = Math.floor(domainWidth / setupCellSize);						    //TODO Make changeable
     var numY = Math.floor(domainHeight / setupCellSize);					    //TODO Make changeable
 
     var density = densityValue;										//TODO Make changeable
-    var viscosity = viscosityValue;
+    var viscosity = viscosityValue;                                    //TODO Make changeable
 
 
     fluidSimSetup = scene.fluidSim = new FluidSim(density, numX, numY, setupCellSize, viscosity);		    //Scene starts without a fluid, give it one
     var n = fluidSimSetup.numYCells;
-    //! Causes NaN in pressureField, but why?
-    //var currentPressure = densityValue * setupCellSize / scene.dt;
-    //scene.fluidSim.pressureField.fill(currentPressure);
 
-    //TODO Decouple from Hard Code, add more scenes. Scenes stored in Database
+
     //Go through all cells
     if (sceneNr == 0) {   		// tank
 
@@ -112,14 +102,14 @@ function setupScene(sceneNr = 0)		//Always start with sceneNr = 0 aka Default-St
             }
         }
 
-        scene.gravity = -9.81; //TODO make part of simulator and changeable
+        scene.gravity = -9.81; //TODO make part of simulator-class and changeable
         scene.showPressure = true;
         scene.showSmoke = false;
         scene.showStreamlines = false;
         scene.showVelocities = false;
-    } else if (sceneNr == 1 || sceneNr == 3) // vortex shedding
+    }
+    else if (sceneNr == 1 || sceneNr == 3) // vortex shedding
     {
-
         var inVel = 2.0;									//TODO make changeable, initial Velocity
         for (var i = 0; i < fluidSimSetup.numXCells; i++)                    //Go through all cells
         {
@@ -136,16 +126,16 @@ function setupScene(sceneNr = 0)		//Always start with sceneNr = 0 aka Default-St
             }
         }
 
-        var pipeH = 0.1 * fluidSimSetup.numYCells;							//TODO Make changeable. Diameter of the wind-pipe
-        var minJ = Math.floor(0.5 * fluidSimSetup.numYCells - 0.5 * pipeH);  //Starting height of smoke tunnel. Changes position
-        var maxJ = Math.floor(0.5 * fluidSimSetup.numYCells + 0.5 * pipeH);  //End height. Make narrower/wider
+        var pipeH = 0.1 * fluidSimSetup.numYCells;							      //TODO Make changeable. Diameter of the pipe
+        var minJ = Math.floor(0.5 * fluidSimSetup.numYCells - 0.5 * pipeH);   //Starting height of smoke tunnel. Changes position
+        var maxJ = Math.floor(0.5 * fluidSimSetup.numYCells + 0.5 * pipeH);   //End height. Make narrower/wider
 
         for (var j = minJ; j < maxJ; j++)			//Makes smoke in the middle of the lefthand wall
         {                                           //TODO Add second loop, so that it is not only on the wall
             fluidSimSetup.smokeField[j] = 0.0;
         }
 
-        setObstacleCircle(0.4, 0.5, true)                 //Sets initial obstacle position and visible
+        setObstacleCircle(0.4, 0.5, true)                 //Sets initial obstacle position and to visible
 
         scene.gravity = 0.0;
         scene.showPressure = false;
@@ -198,10 +188,10 @@ function getSciColor(val, minVal, maxVal) {
     val = diffrenceMinMax == 0.0 ? 0.5 : (val - minVal) / diffrenceMinMax;     //If the difference is zero, set 'val = 0.5' (middle), otherwise normalize 'val' (Is now between 0 and 1)
                                                                                //normalizes 'val'. Can be interpreted as its relative position between 'minVal' and 'maxVal' in '%'
     var m = 0.25;
-    var num = Math.floor(val / m);                              //NOTE: Math.floor() returns the largest integer less than or equal to a given number.
-                                                                // If 'val' is between [0, <0.25] it gets rounded to 0. [0.25, <0.5] to 1; [0.5, <0.75] to 2; [0.75, <1] to 3
-    var saturation = (val - num * m) / m;                       //between zero and 1
-    var r, g, b;                                                //red, green, blue
+    var num = Math.floor(val / m);                               //NOTE: Math.floor() returns the largest integer less than or equal to a given number.
+                                                                            // If 'val' is between [0, <0.25] it gets rounded to 0. [0.25, <0.5] to 1; [0.5, <0.75] to 2; [0.75, <1] to 3
+    var saturation = (val - num * m) / m;                          //between zero and 1
+    var r, g, b;                                                            //red, green, blue
 
     switch (num) {
         case 0: //Blues
@@ -226,23 +216,23 @@ function getSciColor(val, minVal, maxVal) {
             break;
     }
 
-    return [255 * r, 255 * g, 255 * b, 255]                     //RGB value with an alpha value of 255 (last entry in array) / fully opaque
+    return [255 * r, 255 * g, 255 * b, 255]                             //RGB value with an alpha value of 255 (last entry in array) / fully opaque
 }
 
 //Draws the results from the fluid simulation to the canvas
-function draw() {                                               //TODO Break down into smaler functions?
-    canvas2DContext.clearRect(0, 0, canvas.width, canvas.height);             //Start with a blank canvas
+function draw() {                                                  //TODO Break down into smaler functions?
+    canvas2DContext.clearRect(0, 0, canvas.width, canvas.height);  //Start with a blank canvas
 
-    canvas2DContext.fillStyle = "#FF0000";                                    //Fill red
-    fluidSimDraw = scene.fluidSim;                                            //Take the fluid from the scene
-    n = fluidSimDraw.numYCells;                                                 //Grid Height
+    canvas2DContext.fillStyle = "#FF0000";                               //Fill red
+    fluidSimDraw = scene.fluidSim;                                       //Take the fluid from the scene
+    n = fluidSimDraw.numYCells;                                          //Grid Height
     var cellScale = 1.1;                                        //TODO Make adjustable Scaling factor
-    var cellSizeDraw = fluidSimDraw.cellSize;                                                //Grid Spacing
+    var cellSizeDraw = fluidSimDraw.cellSize;
 
-    minP = fluidSimDraw.pressureField[0];                                              //set 'minP' to pressure value of the first cell. To have a starting value to compare
-    maxP = fluidSimDraw.pressureField[0];                                              //set 'maxP' to pressure value of the first cell.
+    minP = fluidSimDraw.pressureField[0];                               //set 'minP' to pressure value of the first cell. To have a starting value to compare
+    maxP = fluidSimDraw.pressureField[0];                               //set 'maxP' to pressure value of the first cell.
 
-    for (var i = 0; i < fluidSimDraw.numCells; i++) {                      //Go through each cell. Compare and update 'minP' and 'maxP'
+    for (var i = 0; i < fluidSimDraw.numCells; i++) {          //Go through each cell. Compare and update 'minP' and 'maxP'
         minP = Math.min(minP, fluidSimDraw.pressureField[i]);
         maxP = Math.max(maxP, fluidSimDraw.pressureField[i]);
     }
@@ -294,10 +284,10 @@ function draw() {                                               //TODO Break dow
             g = rgb_colorArray[1];
             b = rgb_colorArray[2];
 
-            for (var yi = y; yi < y + cy; yi++) { //go through all y-values
-                var p = 4 * (yi * canvas.width + x)  // p = starting index of the current pixel. Multiply by for since every pixel has 4 values. R,G,B and Alpha
+            for (var yi = y; yi < y + cy; yi++) {       //go through all y-values
+                var p = 4 * (yi * canvas.width + x)     // p = starting index of the current pixel. Multiply by for since every pixel has 4 values. R,G,B and Alpha
 
-                for (var xi = 0; xi < cx; xi++) {   //go through all x-values
+                for (var xi = 0; xi < cx; xi++) {       //go through all x-values
                     canvasImageData.data[p++] = r;               //Increment p by one after each. Start at p(red). Then add +1
                     canvasImageData.data[p++] = g;               //Steps to the green value of the current pixel, add +1 to get to blue, and one more to get to alpha
                     canvasImageData.data[p++] = b;
@@ -309,9 +299,7 @@ function draw() {                                               //TODO Break dow
 
     canvas2DContext.putImageData(canvasImageData, 0, 0); //Put all the data(pixel values) of the  object id onto the canvas. starting at point [0, 0]
 
-    if (scene.showVelocities) { //Shows current velocities and their direction
-        //! Extremly laggy!
-        //TODO dont show every velocity, similar to streamlines
+    if (scene.showVelocities) {             //Shows current velocities and their direction
         canvas2DContext.strokeStyle = "#000000";
         scale = 0.02;
 
@@ -381,7 +369,7 @@ function draw() {                                               //TODO Break dow
     if (scene.showStreamlines) {
 
         var segLen = fluidSimDraw.cellSize * 0.2;  //Segment length? Not used
-        var numSegs = 5;         //Iteration length for drawing streamline. The biger the longer a streamline.
+        var numSegs = 5;         //Iteration length for drawing streamline. The bigger the longer a streamline.
         //Lower means more individual streamlines.
         canvas2DContext.strokeStyle = "#000000";      //Streamline color
 
@@ -437,33 +425,7 @@ function draw() {                                               //TODO Break dow
         canvas2DContext.stroke();
         canvas2DContext.lineWidth = 1.0;  //!Unnecessary
 
-        canvas2DContext.path
-
-        //Draw triangle
-        /*
-                    canvas2DContext.beginPath();
-                    var sideLength = 5*canvasScale; // Set the length of each side of the triangle
-                    var height = (sideLength / 2) * Math.sqrt(3); // Calculate the height of the triangle
-                    var x1 = simToCanvasX((x - sideLength) / 2); // X coordinate of the first vertex
-                    var y1 = simToCanvasY((y + height) / 2); // Y coordinate of the first vertex
-                    var x2 = simToCanvasX((x + sideLength) / 2); // X coordinate of the second vertex
-                    var y2 = simToCanvasY((y + height) / 2); // Y coordinate of the second vertex
-                    var x3 = simToCanvasX(x); // X coordinate of the third vertex
-                    var y3 = simToCanvasY((y - height) / 2); // Y coordinate of the third vertex
-
-
-
-                    // Move the pen to the first vertex
-                    canvas2DContext.moveTo(x1, y1);
-
-                    // Draw lines from the first vertex to the second vertex and then to the third vertex
-                    canvas2DContext.lineTo(x2, y2);
-                    canvas2DContext.lineTo(x3, y3);
-                    canvas2DContext.closePath();
-                    // Fill the triangle with the specified color
-                    canvas2DContext.fill();
-
-         */
+        canvas2DContext.pat
     }
 
 

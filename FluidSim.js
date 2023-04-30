@@ -16,7 +16,7 @@ class FluidSim {
         this.density = density;
         this.viscosity = viscosity;
         this.numXCells = numX + 2;							//Number of Cells in x Direction; +2 for values at the edge
-        this.numYCells = numY + 2;							//Number of Cells in y Direction; +2 for values at the edge
+        this.numYCells = numY + 2;							//TODO Make globally available. Number of Cells in y Direction; +2 for values at the edge
         this.numCells = this.numXCells * this.numYCells;			//Total number of cells. necessary to determine size of pressure, velocity etc. fields
         this.cellSize = simulationCellSize;										//Grid Spacing
         this.xVel = new Float64Array(this.numCells);		//Velocity Field in horizontal/X-Direction. Unit: m/s
@@ -25,17 +25,17 @@ class FluidSim {
         this.newYVel = new Float64Array(this.numCells);
         this.pressureField = new Float64Array(this.numCells);		//Pressure Field
         this.pressureField.fill(0.0);
-        this.cellType = new Float64Array(this.numCells);		//Marker for all cells, s=0 for walls, s=1 for normal cells
+        this.cellType = new Float64Array(this.numCells);		//Marker for all cells, cellType =0 for walls, cellType =1 for normal cells
         this.smokeField = new Float64Array(this.numCells);		//Smoke/Mist Field  1=white 0=black
         this.newSmokeField = new Float64Array(this.numCells);
         this.smokeField.fill(1.0)								//Start with "smoke value" of 1 everywhere
-        // var num = numX * numY;							//Number of cells excluding Walls, currently not used
+
     }
 
 //!-----------------------------------------New Math Functions--------------------------------
     roundToDecimal(number) {
         number = number.toFixed(5);     //Rounds to 5 decimal places, but returrns number as a string
-        number = parseFloat(number);     // convert number back to a float
+        number = parseFloat(number);                // convert number back to a float
         return number;
     }
 
@@ -183,7 +183,7 @@ class FluidSim {
                     }
                     var div = this.computeDivergence(this.xVel, this.yVel, i, j);
                     var relativeDivergence = -div / numberFreeEdges;					// Equal part through each adjacent cells
-                    relativeDivergence *= scene.overRelaxation;             // Scale up by overRelaxationFactor for faster convergence
+                    relativeDivergence *= scene.overRelaxation;                                 // Scale up by overRelaxationFactor for convergence reasons
                     this.pressureField[i * n + j] += staticPressure * relativeDivergence;
 
                     var laplacianX = this.computeLaplacian(this.xVel, i, j);
@@ -427,7 +427,7 @@ class FluidSim {
         this.addGravity(dt, gravity);
         this.solvePressureField(this.pressureField, this.xVel, this.yVel, dt);
         this.addPressureTerm(dt);
-        this.pressureField.fill(0.0);				//TODO: Make optional to show why its necessary. Clear pressureField.
+        this.pressureField.fill(0.0);				//TODO  Make optional to show why its necessary. Clear pressureField.
 
         this.forceIncompressibility(numIters, dt);
         //this.newforceIncompressibility(numIters, dt, viscosity);  //Remove comments two switch between function implementations. newforceIncompressibility() currently not working correctly.
