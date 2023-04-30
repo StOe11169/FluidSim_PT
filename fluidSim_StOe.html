@@ -161,8 +161,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             this.newSmokeField = new Float64Array(this.numCells);
             this.smokeField.fill(1.0)								//Start with "smoke value" of 1 everywhere
             // var num = numX * numY;							//Number of cells excluding Walls, currently not used
-            this.xVel.fill(0.0);
-            this.yVel.fill(0.0);
+            //this.xVel.fill(0.0); works without filling the fields.
+            //this.yVel.fill(0.0);
         }
 
 //!-----------------------------------------New Math Functions--------------------------------
@@ -207,28 +207,49 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
             }
         }
 
-        computePressureTerm(p, i, j, isHorizontal, dt) {
+        computePressureTerm(i, j, isHorizontal, dt) {
             //compute the influence of the pressure gradient on the velocity field by a forward finite difference method.
             // pressureDifference = p(x+h)-p(x) ) / h
             // pressureTermV(i,j) = pressureDifference(i,j) * dt / (density * cellSize);
             var n = this.numYCells;
-            var index = i * n + j;
 
-            if (isHorizontal = true) {
+            if (isHorizontal) {
                 //Compute horizontal pressure term
-                var pressureDifferenceX = (this.pressureField[i * n + j] - this.pressureField[(i + 1) * n + j]) / this.cellSize;
-                var pressureTermX = pressureDifferenceX * dt / (this.density * this.cellSize);
+                //console.log("pressureField[" + ( i * n +j ) + "] = " + this.pressureField[i*n+j]);
+                //console.log("pressureField[" + ((i + 1) * n + j) + "] = " + this.pressureField[i*n+j])
+                //console.log("Reached computePressureTerm X");
+                //console.log("pressureGradientX: " + pressureGradientX);
+                var pressureGradientX = (this.pressureField[i * n + j] - this.pressureField[(i + 1) * n + j]) / this.cellSize;  //! Last error: pressureDifference NaN. Divide by cellSize to normalize pressure Gradient, so that it is independent of the cellSize.
+
+                var pressureTermX = pressureGradientX * dt / (this.density * this.cellSize);
+                //console.log("pressureTermX: " + pressureTermX);
                 //Note: [(i + 1) * n + j] is right of [i * n + j]
             } else {
                 //Compute vertical pressure term
-                var pressureDifferenceY = (this.pressureField[i * n + j] - this.pressureField[i * n + (j + 1)]) / this.cellSize;
-                var pressureTermY = pressureDifferenceY * dt / (this.density * this.cellSize);
+                var pressureGradient = (this.pressureField[i * n + j] - this.pressureField[i * n + (j + 1)]);
+                var pressureTerm = pressureGradient * dt /  (this.density * this.cellSize);
+
                 //Note: [i * n + (j + 1)] is visually "below" [i * n + j]. Note that the y-direction of the grid points downwards
             }
-            return (isHorizontal ? pressureTermX : pressureTermY);
+            return pressureTerm;
         }
 
-        //Solving Fields
+        addPressureTerm(dt) {
+        var n = this.numYCells;
+            for (let i = 1; i < this.numXCells; i++) {
+                for (let j = 1; j < n - 1; j++) {
+                    var index = i * n + j;
+                    if (this.cellType[i * n + j] != 0.0 && this.cellType[(i - 1) * n + j] != 0.0 && j < this.numYCells - 1) {              //check for obstacles and walls
+                        let pressureTermX = this.computePressureTerm(i, j, true);
+                        this.newXVel[index] = dt * pressureTermX;
+                        let pressureTermY = this.computePressureTerm(i, j, false);
+                        this.newYVel[index] = dt * pressureTermY;
+                    }
+                }
+                this.xVel[index] += this.newXVel[index];
+                this.yVel[index] += this.newYVel[index];
+            }
+        }
 
         solvePressureField(pressureField, xVel, yVel, dt) {
             //TODO add static pressure
@@ -258,30 +279,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
                     pressureField[index] = newPressure;        //Set the newPressure at the index.
                 }
             }
-            console.log("Solved Pressure field")
         }
 
-        addPressureTerm(dt) {
-        var n = this.numYCells;
-            for (let i = 1; i < this.numXCells; i++) {
-                for (let j = 1; j < n - 1; j++) {
-                    var index = i * n + j;
-                    if (this.cellType[i * n + j] != 0.0 && this.cellType[(i - 1) * n + j] != 0.0 && j < this.numYCells - 1) {              //check for obstacles and walls
-                        let pressureTermX = this.computePressureTerm(this.pressureField, true);
-                        this.newXVel[index] += dt * pressureTermX;
-                    }
-
-                    if (this.cellType[i * n + j] != 0.0 && this.cellType[(i - 1) * n + j] != 0.0 && j < this.numYCells - 1) {
-                        let pressureTermY = this.computePressureTerm(this.pressureField, false);
-                        this.newYVel[index] += dt * pressureTermY;
-                    }
-                    this.xVel[index] += this.newXVel[index];
-                    this.yVel[index] += this.newYVel[index];
-                }
-            }
-        }
-
-        newforceIncompressibility(numIters, dt, viscosity) { //! Leads to odd behaviour
+        newforceIncompressibility(numIters, dt, viscosity) {
+            //! Leads to odd behaviour
             //Multiple iterations through all cells
             var n = this.numYCells;
             var densityValue = densitySlider.value;
@@ -545,26 +546,51 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
         performSimulationStep(dt, gravity, numIters, viscosity) {
 
-            this.addGravity(dt, gravity);
+
             this.addViscousTerm(dt, viscosity);
+            this.addGravity(dt, gravity);
+
+
             this.solvePressureField(this.pressureField, this.xVel, this.yVel, dt);
-            //this.addPressureTerm(dt);
+            console.log("-----------------------------Before add pressure-----------------------------");
+            console.log("Density: " + this.density);
+            console.log("CellSize: " + this.cellSize);
+            console.log("Max X-Vel: " + Math.max(...this.xVel));
+            console.log("Max Y-Vel: " + Math.max(...this.yVel));
+            console.log("maxPressure:" + Math.max(...this.pressureField));
+
+            var randompoint = Math.floor(500 * Math.random());
+            console.log("Randompoint: " + randompoint);
+            console.log("pressure at random point:" + scene.fluidSim.pressureField[randompoint]);
+            console.log("scene.dt: " + scene.dt);
+            console.log("density: " + scene.fluidSim.density);
+            console.log("viscosity: " + scene.fluidSim.viscosity);
+            console.log("Cellsize: " + scene.fluidSim.cellSize);
+
+            this.addPressureTerm(dt);
+
+            console.log("-----------------------------After add pressure-----------------------------");
+            console.log("Density: " + this.density);
+            console.log("CellSize: " + this.cellSize);
+            console.log("Max X-Vel: " + Math.max(...this.xVel));
+            console.log("Max Y-Vel: " + Math.max(...this.yVel));
+            console.log("maxPressure:" + Math.max(...this.pressureField));
+            console.log("Randompoint: " + randompoint);
+            console.log("pressure at random point:" + scene.fluidSim.pressureField[randompoint]);
+            console.log("scene.dt: " + scene.dt);
+            console.log("density: " + scene.fluidSim.density);
+            console.log("viscosity: " + scene.fluidSim.viscosity);
+            console.log("Cellsize: " + scene.fluidSim.cellSize);
+
+
             this.pressureField.fill(0.0);				//TODO: Make optional to show why its necessary.Clear pressurefield.
             this.forceIncompressibility(numIters, dt);
             //this.newforceIncompressibility(numIters, dt, viscosity);
-
-
             this.applyBoundaryCondition();
             this.advectVelocity(dt);
             this.advectSmoke(dt);
             this.newXVel.fill(0.0);
             this.newYVel.fill(0.0);
-            console.log("Max X-Vel:");
-            console.log(Math.max(...this.xVel));
-            console.log("Max Y-Vel:");
-            console.log(Math.max(...this.yVel));
-            console.log("CellSize");
-            console.log(this.cellSize);
 
         }
     }
@@ -572,7 +598,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     var scene =			                            //TODO Make this into diffrent functions/options, first 1 example then in database
         {
             gravity: -9.81,			                //TODO Make Changeable and part of FluidSim
-            dt: 1.0 / 120.0,		                //TODO Make Changeable and port of FluidSim
+            dt: 1.0 / 100.0,		                //TODO Make Changeable to show its effects on simulation collapse. Make port of FluidSim
             numIters: 100,
             frameNr: 0,
             overRelaxation: 1.9,		            //TODO Make Changeable and part of FluidSim
@@ -610,16 +636,16 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         var numX = Math.floor(domainWidth / setupCellSize);						    //TODO Make changeable
         var numY = Math.floor(domainHeight / setupCellSize);					    //TODO Make changeable
 
-        var density = densityValue;										//TODO Make changeable
-        var viscosity = viscosityValue;
-        console.log("NumX");
-        console.log(numX);
-        console.log("NumY");
-        console.log(numY);
+        var density = 1000.0; //densityValue;										//TODO Make changeable
+        var viscosity = 0.000001; //viscosityValue;
+
 
 
         fluidSimSetup = scene.fluidSim = new FluidSim(density, numX, numY, setupCellSize, viscosity);		    //Scene starts without a fluid, give it one
         var n = fluidSimSetup.numYCells;
+        //! Causes NaN in pressureField, but why?
+        //var currentPressure = densityValue * this.cellSize / scene.dt;
+        //scene.fluidSim.pressureField.fill(currentPressure);
 
         //TODO Decouple from Hard Code, add more scenes. Scenes stored in Database
         //Go through all cells
@@ -699,6 +725,17 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         document.getElementById("pressureButton").checked = scene.showPressure;
         document.getElementById("smokeButton").checked = scene.showSmoke;
         document.getElementById("overrelaxButton").checked = scene.overRelaxation > 1.0;
+
+        console.log("-----------------------------After Setup-----------------------------");
+        console.log("pressure at [0]: " + scene.fluidSim.pressureField[0]);
+        var randompoint = Math.floor(500 * Math.random());
+        console.log("Randompoint: " + randompoint);
+        console.log("pressure at random point: " + scene.fluidSim.pressureField[randompoint]);
+        console.log("scene.dt: " + scene.dt);
+        console.log("density: " + scene.fluidSim.density);
+        console.log("viscosity: " + scene.fluidSim.viscosity);
+        console.log("Cellsize: " + scene.fluidSim.cellSize);
+
 
     }
 
