@@ -45,6 +45,8 @@ https://john-s-butler-dit.github.io/NumericalAnalysisBook/Chapter%2009%20-%20Ell
     //TODO Check if dynamic viscosity and kinematic viscosity have not been falsly used.
     //! dynamic visocsity = kinematic viscosity * density. my = ny * rho
     //TODO solving incompressibillity causes overflow of float numbers. Like 3.5454...e300
+    //Method to solve incompressebillity currently uses the jacobi not the gaus-seidel method. 
+        On-line change but make this changeable to highlight the diffrences
 
 
 
