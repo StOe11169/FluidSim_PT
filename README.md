@@ -16,6 +16,8 @@ For a more extensive library of examples, e.g. a narrowing pipe, I will probably
 The project is still not entirely finished but incorporates methods to allow for the modelling the effects of a pressure gradient, viscosity and diffusion on the flow of the fluid.
 
 It is still assumed, that the fluid is incompressible, viscosity and density are constant and that the process is isothermal.
+The Simulator uses diffrent numerical approaches to determine divergence, gradient and laplacian of the vectorfields.
+The main approach is semi-Lagrangian advection of the velocity field.
 
 Used resources: 
 
@@ -43,6 +45,8 @@ https://john-s-butler-dit.github.io/NumericalAnalysisBook/Chapter%2009%20-%20Ell
     //TODO Check if dynamic viscosity and kinematic viscosity have not been falsly used.
     //! dynamic visocsity = kinematic viscosity * density. my = ny * rho
     //TODO solving incompressibillity causes overflow of float numbers. Like 3.5454...e300
+    //Method to solve incompressebillity currently uses the jacobi not the gaus-seidel method. 
+        On-line change but make this changeable to highlight the diffrences
 
 
 
