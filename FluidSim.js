@@ -428,9 +428,10 @@ class FluidSim {
         this.solvePressureField(this.pressureField, this.xVel, this.yVel, dt);
         this.addPressureTerm(dt);
         this.pressureField.fill(0.0);				//TODO  Make optional to show why its necessary. Clear pressureField.
-
+        console.log("Max_Xvel, before incomp.: " + Math.max(...this.xVel));
         this.forceIncompressibility(numIters, dt);
         //this.newforceIncompressibility(numIters, dt, viscosity);  //Remove comments two switch between function implementations. newforceIncompressibility() currently not working correctly.
+        console.log("Max_Xvel, after incomp.: " + Math.max(...this.xVel));
 
         this.applyBoundaryCondition();
         this.advectVelocity(dt);
